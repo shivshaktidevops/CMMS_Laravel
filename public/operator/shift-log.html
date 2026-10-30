@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CMMS — Shift Log</title>
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+  .raise-job-toggle {
+    margin-top:.75rem;
+    padding:.75rem 1rem;
+    background:#f0f9ff;
+    border:1.5px solid #bae6fd;
+    border-radius:8px;
+    display:flex;
+    align-items:center;
+    gap:.6rem;
+    cursor:pointer;
+    transition:background .15s;
+  }
+  .raise-job-toggle:hover { background:#e0f2fe; }
+  .raise-job-toggle input[type="checkbox"] {
+    width:16px; height:16px; cursor:pointer; accent-color:#0369a1;
+  }
+  .raise-job-toggle label {
+    font-size:.88rem; font-weight:600; color:#0369a1; cursor:pointer; margin:0;
+  }
+  .raise-job-toggle .toggle-sub {
+    font-size:.75rem; color:#64748b; display:block; font-weight:400; margin-top:1px;
+  }
+
+  /* Job fields that slide in */
+  .job-extra-fields {
+    display:none;
+    margin-top:.75rem;
+    padding:.85rem 1rem;
+    background:#fff;
+    border:1.5px solid #bae6fd;
+    border-radius:8px;
+    animation:fadeIn .2s ease;
+  }
+  .job-extra-fields.show { display:block; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="cmms-header">
+  <div class="logo">🏭 Plant CMMS <span>Shift-in-Charge Panel</span></div>
+  <div style="display:flex;align-items:center;gap:.75rem">
+    <div class="user-info" id="headerUser"></div>
+    <button class="btn-logout" onclick="logout()">Logout</button>
+  </div>
+</header>
+
+<div class="page">
+  <!-- Shift selector banner -->
+  <div class="card" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem;padding:.9rem 1.25rem;margin-bottom:1rem">
+    <div style="display:flex;gap:1.5rem;align-items:center;flex-wrap:wrap">
+      <div>
+        <strong>Current Shift:</strong>
+        <span id="shiftDisplay" style="color:var(--primary);font-weight:700;margin-left:.5rem"></span>
+      </div>
+      <div>
+        <strong>Plant:</strong>
+        <span id="plantDisplay" style="color:#0369a1;font-weight:700;margin-left:.5rem"></span>
+      </div>
+    </div>
+    <div style="display:flex;gap:.5rem" id="deptFilterBar">
+      <button class="dept-btn active" data-dept="All" onclick="filterDept(this)">All</button>
+      <!-- dynamic dept buttons injected here -->
+    </div>
+    <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+      <div style="position:relative">
+        <span style="position:absolute;left:.6rem;top:50%;transform:translateY(-50%);color:#94a3b8">🔍</span>
+        <input type="text" id="eqSearch" placeholder="Search equipment..." oninput="renderEquipment()"
+          style="padding:.4rem .75rem .4rem 1.9rem;border:2px solid #e2e8f0;border-radius:8px;
+                 font-size:.82rem;font-family:inherit;width:200px"
+          onfocus="this.style.borderColor='#1e40af'" onblur="this.style.borderColor='#e2e8f0'">
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="loadEquipment()">🔄 Refresh</button>
+      <button class="btn btn-sm" style="background:#0369a1;color:#fff;border:none;border-radius:8px;padding:.4rem .9rem;font-weight:600;cursor:pointer" onclick="window.location.href='monitoring.html'">📡 Monitoring</button>
+      <button class="btn btn-sm" style="background:#059669;color:#fff;border:none;border-radius:8px;padding:.4rem .9rem;font-weight:600;cursor:pointer" onclick="window.location.href='jobs.html'">🔧 Jobs</button>
+    </div>
+  </div>
+
+  <div class="page-title" id="pageTitle">Equipment Status — Log Today's Activity</div>
+
+  <div id="eqContainer">
+    <div class="loading">Loading equipment...</div>
+  </div>
+</div>
+
+<!-- Stop Reason Modal -->
+<div class="modal-overlay" id="stopModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">⚠️ Report Equipment Stop</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- Equipment Info -->
+      <div style="margin-bottom:1rem;padding:.75rem;background:#fff7ed;border-radius:8px;border:1px solid #fed7aa">
+        <strong id="modalEqName" style="font-size:1.05rem"></strong>
+        <div id="modalEqCode" style="font-size:.8rem;color:#64748b;margin-top:.2rem"></div>
+      </div>
+
+      <!-- Stop Reason -->
+      <div class="form-group">
+        <label class="form-label">Reason for Stoppage *</label>
+        <select class="form-control" id="stopReasonSelect">
+          <option value="">— Select reason —</option>
+        </select>
+      </div>
+
+      <!-- Remarks -->
+      <div class="form-group">
+        <label class="form-label">Additional Remarks (optional)</label>
+        <textarea class="form-control" id="stopRemarks" placeholder="Any additional notes..." rows="2"></textarea>
+      </div>
+
+      <!-- Photos -->
+      <div class="form-group">
+        <label class="form-label">📸 Photos (optional, max 5)</label>
+        <input type="file" id="stopPhotos" accept="image/*" multiple style="display:none" onchange="previewPhotos(this)">
+        <button type="button" class="btn btn-outline" style="width:100%;border-style:dashed" onclick="document.getElementById('stopPhotos').click()">
+          📷 Click to attach photos
+        </button>
+        <div id="photoPreview" style="display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.5rem"></div>
+        <div style="font-size:.75rem;color:#94a3b8;margin-top:.25rem">Accepted: JPG, PNG, WEBP · Max 10MB each</div>
+      </div>
+
+      <!-- ── RAISE JOB TOGGLE ── -->
+      <div class="raise-job-toggle" onclick="toggleJobFields()">
+        <input type="checkbox" id="raiseJobToggle" onclick="event.stopPropagation();toggleJobFields()">
+        <label for="raiseJobToggle">
+          🔧 Also raise a maintenance job for this stoppage?
+          <span class="toggle-sub">Tick to send a work request to the maintenance panel</span>
+        </label>
+      </div>
+
+      <!-- ── JOB EXTRA FIELDS (shown when toggle is ON) ── -->
+      <div class="job-extra-fields" id="jobExtraFields">
+        <div style="font-size:.8rem;font-weight:700;color:#0369a1;text-transform:uppercase;
+                    letter-spacing:.05em;margin-bottom:.75rem;">
+          🔧 Maintenance Job Details
+        </div>
+
+        <!-- Job Title — auto-filled but editable -->
+        <div class="form-group">
+          <label class="form-label">Job Title *</label>
+          <input class="form-control" id="jStopTitle"
+            placeholder="e.g. Gearbox oil leakage in Ball Mill #1">
+        </div>
+
+        <!-- Dept -->
+        <div class="form-group">
+          <label class="form-label">Assign to Department</label>
+          <select class="form-control" id="jStopDept">
+            <option value="">— Select Dept —</option>
+          </select>
+        </div>
+
+        <div style="font-size:.75rem;color:#64748b;margin-top:.25rem;">
+          ℹ️ Equipment, plant, shift and remarks will be auto-filled from the stoppage details above.
+        </div>
+      </div>
+      <!-- ── END JOB TOGGLE ── -->
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-danger" onclick="confirmStop()">Confirm STOPPED</button>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/cmms.js"></script>
+<script>
+let user, allEquipment = [], stopReasons = [], pendingStop = null;
+function getRoleLabel(role) {
+  if (role === 'operator') return 'Shift-in-Charge';
+  if (role === 'maintenance') return 'Department Head';
+  return role;
+}
+
+let currentDept = 'All';
+let currentShift = '';
+
+async function init() {
+  user = requireAuth(['operator', 'admin']);
+  if (!user) return;
+
+  currentShift = user.selectedShift || user.shift || '';
+  if (!currentShift) {
+    showToast('Please login again to select shift', 'error');
+    setTimeout(() => logout(), 2000);
+    return;
+  }
+
+  document.getElementById('headerUser').innerHTML = `<strong>${user.full_name}</strong>${getRoleLabel(user.role)}`;
+  document.getElementById('shiftDisplay').textContent = `Shift ${currentShift}`;
+
+  const plant = user.selectedPlant || user.plant || '';
+  document.getElementById('plantDisplay').textContent = plant || 'All Plants';
+
+  await loadStopReasons();
+  await loadDeptTabs();
+  await loadEquipment();
+  setInterval(loadEquipment, 120000);
+}
+
+async function loadDeptTabs() {
+  try {
+    const data  = await api('/masters/departments');
+    const depts = [...new Map((data.data||[]).map(d => [d.name,d])).values()]
+                    .filter(d => d.is_active !== false);
+    const bar = document.getElementById('deptFilterBar');
+    bar.querySelectorAll('.dept-btn:not([data-dept="All"])').forEach(b => b.remove());
+    depts.forEach(d => {
+      const btn = document.createElement('button');
+      btn.className    = 'dept-btn';
+      btn.dataset.dept = d.name;
+      btn.textContent  = d.name;
+      btn.onclick      = function() { filterDept(this); };
+      bar.appendChild(btn);
+    });
+    // Also populate jStopDept in the modal
+    const sel = document.getElementById('jStopDept');
+    sel.innerHTML = '<option value="">— Select Dept —</option>';
+    depts.forEach(d => {
+      sel.innerHTML += `<option value="${d.name}">${d.name}</option>`;
+    });
+  } catch(e) { console.error('loadDeptTabs:', e); }
+}
+
+async function loadStopReasons() {
+  try {
+    const data = await api('/shift-logs/stop-reasons');
+    stopReasons = data.data;
+    const select = document.getElementById('stopReasonSelect');
+    const groups = {};
+    stopReasons.forEach(r => {
+      if (!groups[r.category]) groups[r.category] = [];
+      groups[r.category].push(r);
+    });
+    select.innerHTML = '<option value="">— Select reason —</option>';
+    Object.entries(groups).forEach(([cat, reasons]) => {
+      const og = document.createElement('optgroup');
+      og.label = cat;
+      reasons.forEach(r => {
+        const opt = document.createElement('option');
+        opt.value = r.id;
+        opt.textContent = r.description;
+        og.appendChild(opt);
+      });
+      select.appendChild(og);
+    });
+  } catch(e) { console.error(e); }
+}
+
+async function loadEquipment() {
+  try {
+    const plant = user.selectedPlant || user.plant || '';
+    const qs    = plant ? `?plant=${encodeURIComponent(plant)}` : '';
+    const data  = await api(`/equipment${qs}`);
+    allEquipment = data.data;
+    renderEquipment();
+  } catch(e) {
+    document.getElementById('eqContainer').innerHTML =
+      '<div class="empty-state"><div class="icon">❌</div><p>Failed to load equipment. Check connection.</p></div>';
+  }
+}
+
+function filterDept(btn) {
+  document.querySelectorAll('.dept-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentDept = btn.dataset.dept;
+  renderEquipment();
+}
+
+function renderEquipment() {
+  const q = (document.getElementById('eqSearch') ? document.getElementById('eqSearch').value : '').toLowerCase().trim();
+  let filtered = currentDept === 'All' ? allEquipment : allEquipment.filter(e => e.department === currentDept);
+  if (q) filtered = filtered.filter(e =>
+    (e.name||'').toLowerCase().includes(q) ||
+    (e.code||'').toLowerCase().includes(q) ||
+    (e.location||'').toLowerCase().includes(q));
+  if (!filtered.length) {
+    document.getElementById('eqContainer').innerHTML = '<div class="empty-state"><div class="icon">📋</div><p>No equipment found.</p></div>';
+    return;
+  }
+
+  const depts = {};
+  filtered.forEach(eq => {
+    if (!depts[eq.department]) depts[eq.department] = [];
+    depts[eq.department].push(eq);
+  });
+
+  let html = '';
+  Object.entries(depts).forEach(([dept, items]) => {
+    const isProcessDept = dept.toLowerCase().includes('process');
+    const deptLabel = isProcessDept
+      ? `<span style="color:#0369a1">${dept}</span> <span style="font-weight:400;font-size:.78rem;color:#64748b;text-transform:none;letter-spacing:0">— Process Parameter Logging</span>`
+      : dept;
+    html += `<div style="margin-bottom:1.5rem">
+      <div style="font-weight:700;font-size:.85rem;color:var(--text-sm);text-transform:uppercase;letter-spacing:.5px;margin-bottom:.75rem;padding:.4rem .75rem;background:${isProcessDept ? '#e0f2fe' : '#f1f5f9'};border-radius:6px">${deptLabel}</div>
+      <div class="eq-grid">`;
+    items.forEach(eq => {
+      const running    = eq.current_status === 'RUNNING';
+      const downMins   = eq.current_downtime_min ? parseInt(eq.current_downtime_min) : 0;
+      // Department restriction — Shift-in-Charge (operator) can only stop own dept equipment
+      const ownDept   = user.role !== 'operator' || !user.department || eq.department === user.department;
+      const isProcess = eq.department && eq.department.toLowerCase().includes('process');
+      const isElectMech = (String(eq.department || '').toLowerCase().includes('elect') ||
+                           String(eq.department || '').toLowerCase().includes('mech'));
+
+      // ── Card locked for other departments — identical look, zero interaction ──
+      if (!ownDept) {
+        html += `
+        <div class="eq-card ${running ? 'running' : 'stopped'}" id="eq-${eq.id}"
+          style="pointer-events:none;user-select:none;position:relative">
+          <!-- Invisible click blocker -->
+          <div style="position:absolute;inset:0;z-index:10;border-radius:inherit"></div>
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div>
+              <div class="eq-name">${eq.name}</div>
+              <div class="eq-meta">${eq.code} · ${eq.location || eq.department}</div>
+              ${isElectMech ? `
+              <div style="margin-top:.55rem;padding-top:.45rem;border-top:1px dashed #e2e8f0;font-size:.74rem;line-height:1.45;color:#475569;">
+                <div>RPM &nbsp; Std: <strong>${eq.standard_rpm ?? '—'}</strong> &nbsp; | &nbsp; Running: <strong>${eq.actual_rpm ?? '—'}</strong></div>
+                <div style="margin-top:.12rem">Load &nbsp; Std: <strong>${eq.standard_load ?? '—'}</strong> &nbsp; | &nbsp; Running: <strong>${eq.actual_load ?? '—'}</strong></div>
+                <div style="margin-top:.4rem;color:#64748b;">Last Job: ${eq.last_job_title || 'No history'} ${eq.last_job_closed_at ? '· ' + fmtDate(eq.last_job_closed_at) : ''}</div>
+              </div>` : ''}
+            </div>
+            <span class="badge badge-${running ? 'running' : 'stopped'}">${eq.current_status}</span>
+          </div>
+          ${!running ? `<div class="downtime-timer">⏱ Down: ${fmtDuration(downMins)} ${eq.open_bd_number ? '· ' + eq.open_bd_number : ''}</div>` : ''}
+          ${running && eq.active_job_number ? `<div style="margin:.4rem 0;padding:.4rem .6rem;background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;font-size:.75rem;color:#92400e;font-weight:600">⚠️ Active Job: ${eq.active_job_number} (${eq.active_job_status}) — Close job before marking RUNNING again</div>` : ''}
+          <div class="eq-actions" style="margin-top:.75rem">
+            ${isProcess
+              ? `<button class="btn-running" style="width:100%;background:#0369a1;border-color:#0369a1">📡 Monitoring</button>`
+              : `<button class="btn-running" ${running ? 'disabled' : ''}>✅ RUNNING</button>
+                 <button class="btn-stopped" ${!running ? 'disabled' : ''}>🔴 STOPPED</button>`
+            }
+          </div>
+        </div>`;
+
+      // ── Process dept own card ───────────────────────────────
+      } else if (isProcess) {
+        html += `
+        <div class="eq-card running" id="eq-${eq.id}">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div>
+              <div class="eq-name">${eq.name}</div>
+              <div class="eq-meta">${eq.code} · ${eq.location || eq.department}</div>
+            </div>
+            <span class="badge" style="background:#e0f2fe;color:#0369a1;font-size:.72rem;padding:.25rem .6rem;border-radius:20px">PROCESS</span>
+          </div>
+          <div class="eq-actions" style="margin-top:.75rem">
+            <button class="btn-running" style="width:100%;background:#0369a1;border-color:#0369a1"
+               onclick="window.location.href='monitoring.html?equipment_id=${eq.id}'">
+              📡 Monitoring
+            </button>
+          </div>
+        </div>`;
+
+      // ── Electrical / Mechanical own card ───────────────────
+      } else {
+        html += `
+        <div class="eq-card ${running ? 'running' : 'stopped'}" id="eq-${eq.id}">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+            <div>
+              <div class="eq-name">${eq.name}</div>
+              <div class="eq-meta">${eq.code} · ${eq.location || eq.department}</div>
+              ${isElectMech ? `
+              <div style="margin-top:.55rem;padding-top:.45rem;border-top:1px dashed #e2e8f0;font-size:.74rem;line-height:1.45;color:#475569;">
+                <div>RPM &nbsp; Std: <strong>${eq.standard_rpm ?? '—'}</strong> &nbsp; | &nbsp; Running: <strong>${eq.actual_rpm ?? '—'}</strong></div>
+                <div style="margin-top:.12rem">Load &nbsp; Std: <strong>${eq.standard_load ?? '—'}</strong> &nbsp; | &nbsp; Running: <strong>${eq.actual_load ?? '—'}</strong></div>
+                <div style="margin-top:.4rem;color:#64748b;">Last Job: ${eq.last_job_title || 'No history'} ${eq.last_job_closed_at ? '· ' + fmtDate(eq.last_job_closed_at) : ''}</div>
+              </div>` : ''}
+            </div>
+            <span class="badge badge-${running ? 'running' : 'stopped'}">${eq.current_status}</span>
+          </div>
+          ${!running ? `<div class="downtime-timer">⏱ Down: ${fmtDuration(downMins)} ${eq.open_bd_number ? '· ' + eq.open_bd_number : ''}</div>` : ''}
+          ${running && eq.active_job_number ? `<div style="margin:.4rem 0;padding:.4rem .6rem;background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;font-size:.75rem;color:#92400e;font-weight:600">⚠️ Active Job: ${eq.active_job_number} (${eq.active_job_status}) — Close job before marking RUNNING again</div>` : ''}
+          <div class="eq-actions" style="margin-top:.75rem">
+            <button class="btn-running" onclick="logStatus(${eq.id}, 'RUNNING', '${escHtml(eq.name)}')"
+              ${running ? 'disabled' : ''}>✅ RUNNING</button>
+            <button class="btn-stopped" onclick="openStopModal(${eq.id}, '${escHtml(eq.name)}', '${eq.code}')"
+              ${!running ? 'disabled' : ''}>🔴 STOPPED</button>
+          </div>
+        </div>`;
+      }
+    });
+    html += `</div></div>`;
+  });
+
+  // Update page title based on whether user is in Process dept
+  const titleEl = document.getElementById('pageTitle');
+  if (titleEl) {
+    const isProc = user.department && user.department.toLowerCase().includes('process');
+    titleEl.textContent = isProc
+      ? `Process Parameters — Log Today's Activity`
+      : `Equipment Status — Log Today's Activity`;
+  }
+  document.getElementById('eqContainer').innerHTML = html || '<div class="empty-state">No equipment found.</div>';
+}
+function openStopModal(eqId, eqName, eqCode) {
+  pendingStop = { eqId, eqName, eqCode };
+  document.getElementById('modalEqName').textContent = eqName;
+  document.getElementById('modalEqCode').textContent = eqCode;
+  document.getElementById('stopReasonSelect').value  = '';
+  document.getElementById('stopRemarks').value       = '';
+
+  // Reset job toggle
+  document.getElementById('raiseJobToggle').checked  = false;
+  document.getElementById('jobExtraFields').classList.remove('show');
+  document.getElementById('jStopTitle').value        = '';
+  document.getElementById('jStopDept').value         = '';
+
+  document.getElementById('stopModal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('stopModal').classList.remove('open');
+  pendingStop = null;
+  document.getElementById('stopPhotos').value      = '';
+  document.getElementById('photoPreview').innerHTML = '';
+  document.getElementById('raiseJobToggle').checked = false;
+  document.getElementById('jobExtraFields').classList.remove('show');
+}
+
+// ── Toggle job fields visibility ─────────────────────────────
+function toggleJobFields() {
+  const checkbox   = document.getElementById('raiseJobToggle');
+  const extraFields = document.getElementById('jobExtraFields');
+
+  // Small delay so checkbox state updates first
+  setTimeout(() => {
+    if (checkbox.checked) {
+      extraFields.classList.add('show');
+
+      // Auto-fill job title from equipment name + stop reason
+      const eqName     = pendingStop?.eqName || '';
+      const reasonText = document.getElementById('stopReasonSelect').selectedOptions[0]?.text || '';
+      const autoTitle  = reasonText && reasonText !== '— Select reason —'
+        ? `${reasonText} — ${eqName}`
+        : `Maintenance required — ${eqName}`;
+      document.getElementById('jStopTitle').value = autoTitle;
+    } else {
+      extraFields.classList.remove('show');
+    }
+  }, 10);
+}
+
+function previewPhotos(input) {
+  const preview = document.getElementById('photoPreview');
+  preview.innerHTML = '';
+  const files = Array.from(input.files).slice(0, 5);
+  files.forEach((file, i) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      preview.innerHTML += `
+        <div style="position:relative">
+          <img src="${e.target.result}" style="width:70px;height:70px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0">
+          <span style="position:absolute;top:-5px;right:-5px;background:#ef4444;color:#fff;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:.65rem;cursor:pointer" onclick="removePhoto(${i})">✕</span>
+        </div>`;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function removePhoto(index) {
+  const input = document.getElementById('stopPhotos');
+  const dt    = new DataTransfer();
+  Array.from(input.files).forEach((file, i) => {
+    if (i !== index) dt.items.add(file);
+  });
+  input.files = dt.files;
+  previewPhotos(input);
+}
+
+async function uploadPhotos() {
+  const input = document.getElementById('stopPhotos');
+  if (!input.files.length) return [];
+  const formData = new FormData();
+  Array.from(input.files).slice(0, 5).forEach(f => formData.append('photos', f));
+  try {
+    const token = getToken();
+    const res   = await fetch(`${API_BASE.replace('/api','')}/api/upload`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData
+    });
+    const data = await res.json();
+    return data.files || [];
+  } catch(e) {
+    console.error('Photo upload failed:', e);
+    return [];
+  }
+}
+
+async function confirmStop() {
+  const reasonId = document.getElementById('stopReasonSelect').value;
+  if (!reasonId) { showToast('Please select a stop reason', 'error'); return; }
+
+  // If job toggle is ON, validate job title
+  const raiseJob = document.getElementById('raiseJobToggle').checked;
+  if (raiseJob) {
+    const jobTitle = document.getElementById('jStopTitle').value.trim();
+    if (!jobTitle) {
+      showToast('Please enter a job title', 'error');
+      document.getElementById('jStopTitle').focus();
+      return;
+    }
+  }
+
+  const btn = document.querySelector('#stopModal .btn-danger');
+  btn.disabled = true; btn.textContent = 'Saving...';
+
+  try {
+    const photos = await uploadPhotos();
+
+    // Step 1 — Log the STOPPED status (existing flow, unchanged)
+    await logStatus(pendingStop.eqId, 'STOPPED', pendingStop.eqName, parseInt(reasonId), photos);
+
+    // Step 2 — If toggle ON, raise job automatically
+    if (raiseJob) {
+      const reasonText = document.getElementById('stopReasonSelect').selectedOptions[0]?.text || '';
+      const remarks    = document.getElementById('stopRemarks').value.trim();
+      const jobTitle   = document.getElementById('jStopTitle').value.trim();
+      const jobDept    = document.getElementById('jStopDept').value;
+
+      try {
+        await api('/jobs', {
+          method: 'POST',
+          body: JSON.stringify({
+            title:         jobTitle,
+            description:   reasonText,
+            equipment_id:  pendingStop.eqId,
+            assigned_dept: jobDept || null,
+            remarks:       remarks || null,
+            plant:         user.selectedPlant || user.plant || '100TPD',
+            shift:         currentShift,
+            raised_by_dept: user.department || null
+          })
+        });
+        showToast('✅ Equipment stopped & job raised to maintenance!', 'success');
+      } catch(jobErr) {
+        // Stoppage already saved — just warn about job
+        showToast('Equipment stopped. Job creation failed: ' + jobErr.message, 'error');
+      }
+    }
+
+    closeModal();
+
+  } catch(e) {
+    showToast(e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Confirm STOPPED';
+  }
+}
+
+async function logStatus(eqId, status, eqName, stopReasonId = null, photos = []) {
+  const remarks = document.getElementById('stopRemarks')?.value || '';
+  try {
+    const body = { equipment_id: eqId, status, shift: currentShift };
+    if (status === 'STOPPED') {
+      body.stop_reason_id = stopReasonId;
+      body.remarks        = remarks;
+      body.photos         = photos;
+    }
+    const result = await api('/shift-logs', {
+      method: 'POST',
+      body: JSON.stringify(body)
+    });
+    showToast(result.message || `${eqName} marked ${status}`);
+    await loadEquipment();
+  } catch(e) {
+    showToast(e.message, 'error');
+    throw e; // re-throw so confirmStop catches it
+  }
+}
+
+function escHtml(s) { return s.replace(/'/g, "\\'"); }
+
+function logout() {
+  clearSession();
+  window.location.href = '../login.html';
+}
+
+init();
+</script>
+</body>
+</html>

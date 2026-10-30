@@ -1,0 +1,4 @@
+<?php
+namespace App\Models;
+use Illuminate\Database\Eloquent\Model; use Illuminate\Database\Eloquent\Relations\BelongsTo; use Illuminate\Database\Eloquent\Relations\HasMany;
+class Job extends Model { protected $guarded=[]; public $timestamps=false; protected function casts():array{return ['photos'=>'array','is_multi_assign'=>'boolean','created_at'=>'datetime','assigned_at'=>'datetime','completed_at'=>'datetime','closed_at'=>'datetime','reassigned_at'=>'datetime'];} public function equipment():BelongsTo{return $this->belongsTo(Equipment::class);} public function raisedBy():BelongsTo{return $this->belongsTo(User::class,'raised_by');} public function assignments():HasMany{return $this->hasMany(JobAssignment::class);} public function history():HasMany{return $this->hasMany(JobHistory::class);} }

@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CMMS — Management Dashboard</title>
+<link rel="stylesheet" href="../shared/style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+<body>
+
+<header class="cmms-header">
+  <div class="logo">📊 Plant CMMS <span>Management Dashboard</span></div>
+  <div style="display:flex;align-items:center;gap:.75rem">
+    <div class="user-info" id="headerUser"></div>
+    <button class="btn btn-sm" style="background:#7c3aed;color:#fff;border:none;border-radius:8px;padding:.4rem .9rem;font-weight:600;cursor:pointer" onclick="window.location.href='../reports/reports.html'">📊 Reports</button>
+    <button class="btn-logout" onclick="logout()">Logout</button>
+  </div>
+</header>
+
+<div class="page">
+
+  <!-- Live time banner -->
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:.5rem">
+    <div style="font-size:.85rem;color:#64748b">📅 <span id="liveClock"></span></div>
+    <button class="btn btn-primary btn-sm" onclick="loadAll()">🔄 Refresh Data</button>
+  </div>
+
+  <!-- Plant Tab Selector -->
+  <div style="display:flex;gap:.5rem;margin-bottom:1.25rem;align-items:center;flex-wrap:wrap">
+    <span style="font-size:.82rem;font-weight:700;color:#64748b">Plant View:</span>
+    <button class="dept-btn active" id="ptab-both"    onclick="switchPlant('',    this)">🏭 Both Plants</button>
+    <button class="dept-btn"        id="ptab-100TPD"  onclick="switchPlant('100TPD', this)">100 TPD</button>
+    <button class="dept-btn"        id="ptab-225TPD"  onclick="switchPlant('225TPD', this)">225 TPD</button>
+    <span id="activePlantLabel" style="font-size:.8rem;color:#0369a1;font-weight:600;margin-left:.5rem"></span>
+  </div>
+
+  <!-- KPI Row -->
+  <div class="kpi-grid">
+    <div class="kpi-card kpi-green">
+      <div class="kpi-label">Availability</div>
+      <div class="kpi-value" id="kpiAvail">—</div>
+      <div class="kpi-sub" id="kpiAvailSub">—</div>
+    </div>
+    <div class="kpi-card kpi-red">
+      <div class="kpi-label">Stopped Now</div>
+      <div class="kpi-value" id="kpiStopped">—</div>
+      <div class="kpi-sub">equipment down</div>
+    </div>
+    <div class="kpi-card kpi-orange">
+      <div class="kpi-label">Open Breakdowns</div>
+      <div class="kpi-value" id="kpiOpen">—</div>
+      <div class="kpi-sub">pending action</div>
+    </div>
+    <div class="kpi-card kpi-blue">
+      <div class="kpi-label">Downtime Today</div>
+      <div class="kpi-value" id="kpiDowntime">—</div>
+      <div class="kpi-sub">hours total</div>
+    </div>
+    <div class="kpi-card kpi-blue">
+      <div class="kpi-label">MTTR Today</div>
+      <div class="kpi-value" id="kpiMttr">—</div>
+      <div class="kpi-sub">avg minutes</div>
+    </div>
+    <div class="kpi-card kpi-green">
+      <div class="kpi-label">MTBF (30 days)</div>
+      <div class="kpi-value" id="kpiMtbf">—</div>
+      <div class="kpi-sub">hours</div>
+    </div>
+  </div>
+
+  <!-- Jobs KPI Row - inserted -->
+  <div style="margin-bottom:1rem">
+    <div style="font-size:.78rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.5rem">🔧 Maintenance Jobs — Live Status</div>
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:.75rem">
+      <div class="kpi-card kpi-orange" style="padding:.75rem 1rem">
+        <div class="kpi-label">Open Jobs</div>
+        <div class="kpi-value" id="jkOpen">—</div>
+        <div class="kpi-sub">awaiting assignment</div>
+      </div>
+      <div class="kpi-card kpi-blue" style="padding:.75rem 1rem">
+        <div class="kpi-label">Assigned</div>
+        <div class="kpi-value" id="jkAssigned">—</div>
+        <div class="kpi-sub">dept allocated</div>
+      </div>
+      <div class="kpi-card" style="padding:.75rem 1rem;border-top:3px solid #7c3aed;background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.06)">
+        <div class="kpi-label">In Progress</div>
+        <div class="kpi-value" style="color:#7c3aed" id="jkProgress">—</div>
+        <div class="kpi-sub">being worked on</div>
+      </div>
+      <div class="kpi-card kpi-green" style="padding:.75rem 1rem">
+        <div class="kpi-label">Completed</div>
+        <div class="kpi-value" id="jkCompleted">—</div>
+        <div class="kpi-sub">pending closure</div>
+      </div>
+      <div class="kpi-card" style="padding:.75rem 1rem;border-top:3px solid #475569;background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.06)">
+        <div class="kpi-label">Closed Today</div>
+        <div class="kpi-value" style="color:#475569" id="jkClosedToday">—</div>
+        <div class="kpi-sub">resolved today</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Department Availability Table -->
+  <div class="card" style="margin-bottom:1rem">
+    <div class="card-title">Department Status</div>
+    <div id="deptTable"><div class="loading">Loading...</div></div>
+  </div>
+
+  <!-- Charts Grid -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:1rem;margin-bottom:1rem">
+
+    <div class="card">
+      <div class="card-title">Daily Breakdown Trend (14 Days)</div>
+      <canvas id="trendChart" height="200"></canvas>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Top Breakdown Reasons (30 Days)</div>
+      <canvas id="reasonChart" height="200"></canvas>
+    </div>
+
+  </div>
+
+  <!-- Top Downtime Equipment -->
+  <div class="card">
+    <div class="card-title">Equipment Downtime Ranking — Last 7 Days</div>
+    <div id="eqDowntimeTable"><div class="loading">Loading...</div></div>
+  </div>
+
+  <!-- Open Breakdowns List -->
+  <div class="card" style="margin-top:1rem">
+    <div class="card-title">Currently Open Breakdowns</div>
+    <div id="openBdList"><div class="loading">Loading...</div></div>
+  </div>
+
+  <!-- Open Jobs List -->
+  <div class="card" style="margin-top:1rem">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
+      <div class="card-title" style="margin:0">🔧 Open &amp; Active Jobs</div>
+      <div style="display:flex;gap:.5rem">
+        <select id="jobsFilterSel" class="form-control" style="font-size:.8rem;padding:.3rem .6rem;width:auto" onchange="renderJobsTable()">
+  	<option value="ALL">All Active</option>
+  	<option value="OPEN">Open</option>
+  	<option value="ASSIGNED">Assigned</option>
+  	<option value="IN PROGRESS">In Progress</option>
+  	<option value="COMPLETED">Completed</option>
+  	<option value="CLOSED">Closed</option>
+        </select>
+      </div>
+    </div>
+    <div id="jobsList"><div class="loading">Loading...</div></div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════
+       SECTION 2 — Department Performance
+  ═══════════════════════════════════════════════════════ -->
+  <div class="card" style="margin-top:1rem">
+    <div class="card-title">🏢 Department Performance — Today</div>
+    <div id="deptPerfTable"><div class="loading">Loading...</div></div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════
+       SECTION 3 — Shift Performance
+  ═══════════════════════════════════════════════════════ -->
+  <div class="card" style="margin-top:1rem">
+    <div class="card-title">⏰ Shift Performance — Today</div>
+    <div id="shiftPerfTable"><div class="loading">Loading...</div></div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════
+       SECTION 7 — TPD Comparison
+  ═══════════════════════════════════════════════════════ -->
+  <div class="card" style="margin-top:1rem;margin-bottom:1rem">
+    <div class="card-title">⚖️ TPD Comparison — Today</div>
+    <div id="tpdCompTable"><div class="loading">Loading...</div></div>
+  </div>
+
+</div>
+
+<script src="../shared/cmms.js"></script>
+<script>
+let user;
+
+function getRoleLabel(role) {
+  if (role === 'operator') return 'Shift-in-Charge';
+  if (role === 'maintenance') return 'Department Head';
+  return role;
+}
+
+let trendChart, reasonChart;
+let currentPlant = ''; // empty = both plants
+
+
+// ── Department Performance ────────────────────────────────────
+async function loadDeptPerf(plant) {
+  const el = document.getElementById('deptPerfTable');
+  try {
+    const qs   = plant ? `?plant=${plant}` : '';
+    const data = await api(`/dashboard/dept-performance${qs}`);
+    const rows = data.data;
+    if (!rows || !rows.length) { 
+      el.innerHTML = '<p class="empty-state">No department data available</p>'; 
+      return; 
+    }
+    let html = `<div class="table-wrap"><table>
+      <thead><tr>
+        <th>Department</th>
+        <th style="text-align:center">Open Jobs</th>
+        <th style="text-align:center">Closed Jobs</th>
+        <th style="text-align:center">Avg Repair Time</th>
+      </tr></thead><tbody>`;
+    rows.forEach(r => {
+      const hrs = r.avg_repair_min > 0
+        ? (r.avg_repair_min >= 60
+            ? `${(r.avg_repair_min/60).toFixed(1)} hrs`
+            : `${r.avg_repair_min} min`)
+        : '—';
+      html += `<tr>
+        <td><strong>${r.dept}</strong></td>
+        <td style="text-align:center">
+          <span class="${r.open_jobs > 0 ? 'badge badge-open' : 'badge badge-running'}">${r.open_jobs}</span>
+        </td>
+        <td style="text-align:center">
+          <span class="badge badge-running">${r.closed_jobs}</span>
+        </td>
+        <td style="text-align:center;font-weight:600;color:#1e40af">${hrs}</td>
+      </tr>`;
+    });
+    html += '</tbody></table></div>';
+    el.innerHTML = html;
+  } catch(e) { 
+    console.error('loadDeptPerf error:', e);
+    el.innerHTML = '<p class="empty-state">Error loading department data</p>'; 
+  }
+}
+
+// ── Shift Performance ─────────────────────────────────────────
+async function loadShiftPerf(plant) {
+  const el = document.getElementById('shiftPerfTable');
+  try {
+    const qs   = plant ? `?plant=${plant}` : '';
+    const data = await api(`/dashboard/shift-performance${qs}`);
+    const rows = data.data;
+    if (!rows.length) { el.innerHTML = '<p class="empty-state">No data today</p>'; return; }
+    let html = `<div class="table-wrap"><table>
+      <thead><tr>
+        <th>Shift</th>
+        <th style="text-align:center">Inspections Done</th>
+        <th style="text-align:center">Deviations (Breakdowns)</th>
+        <th style="text-align:center">Jobs Created</th>
+      </tr></thead><tbody>`;
+    rows.forEach(r => {
+      html += `<tr>
+        <td><strong>Shift ${r.shift}</strong></td>
+        <td style="text-align:center;font-weight:600;color:#166534">${r.inspections}</td>
+        <td style="text-align:center">
+          <span class="${r.deviations > 0 ? 'badge badge-stopped' : 'badge badge-running'}">${r.deviations}</span>
+        </td>
+        <td style="text-align:center;font-weight:600;color:#1e40af">${r.jobs_created}</td>
+      </tr>`;
+    });
+    html += '</tbody></table></div>';
+    el.innerHTML = html;
+  } catch(e) { el.innerHTML = '<p class="empty-state">Error loading</p>'; }
+}
+
+// ── TPD Comparison ────────────────────────────────────────────
+async function loadTpdComp() {
+  const el = document.getElementById('tpdCompTable');
+  try {
+    const data = await api('/dashboard/tpd-comparison');
+    const rows = data.data;
+    if (!rows.length) { el.innerHTML = '<p class="empty-state">No data</p>'; return; }
+    let html = `<div class="table-wrap"><table>
+      <thead><tr>
+        <th>Plant</th>
+        <th style="text-align:center">Deviations Today</th>
+        <th style="text-align:center">Jobs Today</th>
+        <th style="text-align:center">Equipment Efficiency</th>
+      </tr></thead><tbody>`;
+    rows.forEach(r => {
+      const eff = parseFloat(r.efficiency) || 0;
+      const effColor = eff >= 90 ? '#166534' : eff >= 75 ? '#d97706' : '#dc2626';
+      html += `<tr>
+        <td><strong style="color:#1e40af">🏭 ${r.plant}</strong></td>
+        <td style="text-align:center">
+          <span class="${r.deviations > 0 ? 'badge badge-stopped' : 'badge badge-running'}">${r.deviations}</span>
+        </td>
+        <td style="text-align:center;font-weight:600">${r.jobs}</td>
+        <td style="text-align:center">
+          <span style="font-size:1.1rem;font-weight:800;color:${effColor}">${eff}%</span>
+          <div style="background:#e2e8f0;border-radius:4px;height:6px;margin-top:4px">
+            <div style="background:${effColor};width:${eff}%;height:6px;border-radius:4px;transition:width .5s"></div>
+          </div>
+        </td>
+      </tr>`;
+    });
+    html += '</tbody></table></div>';
+    el.innerHTML = html;
+  } catch(e) { el.innerHTML = '<p class="empty-state">Error loading</p>'; }
+}
+
+async function init() {
+  user = requireAuth(['management', 'admin']);
+  if (!user) return;
+  document.getElementById('headerUser').innerHTML = `<strong>${user.full_name}</strong>${getRoleLabel(user.role)}`;
+
+  // Live clock
+  function updateClock() {
+    document.getElementById('liveClock').textContent =
+      new Date().toLocaleString('en-IN', { weekday:'long', day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:true });
+  }
+  updateClock(); setInterval(updateClock, 1000);
+
+  await loadAll();
+  setInterval(loadAll, 120000); // auto-refresh 2 min
+}
+
+async function loadAll() {
+  const p = currentPlant;
+  await Promise.all([
+    loadSummary(p), loadTrend(p), loadReasons(p),
+    loadEqDowntime(p), loadOpenBds(p), loadDeptView(p), loadJobs(p),
+    loadDeptPerf(p), loadShiftPerf(p), loadTpdComp()
+  ]);
+}
+
+function switchPlant(plant, btn) {
+  currentPlant = plant;
+  document.querySelectorAll('#ptab-both, #ptab-100TPD, #ptab-225TPD').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const lbl = document.getElementById('activePlantLabel');
+  lbl.textContent = plant ? '— showing ' + plant + ' only' : '';
+  loadAll();
+}
+
+async function loadSummary(plant) {
+  try {
+    const qs = plant ? `?plant=${plant}` : '';
+    const data = await api(`/dashboard/summary${qs}`);
+    const d = data.data;
+    const a = d.availability;
+    const t = d.today;
+    const m = d.mtbf;
+
+    document.getElementById('kpiAvail').textContent     = `${a.availability_pct}%`;
+    document.getElementById('kpiAvailSub').textContent  = `${a.running} of ${a.total} running`;
+    document.getElementById('kpiStopped').textContent   = a.stopped;
+    document.getElementById('kpiOpen').textContent      = t.open_breakdowns;
+    document.getElementById('kpiDowntime').textContent  = (t.total_downtime_today_min / 60).toFixed(1);
+    document.getElementById('kpiMttr').textContent      = Math.round(t.avg_mttr_min) || '—';
+    document.getElementById('kpiMtbf').textContent      = m.mtbf_hours || '—';
+  } catch(e) { console.error(e); }
+}
+
+async function loadDeptView(plant) {
+  try {
+    const qs = plant ? `?plant=${plant}` : '';
+    const data = await api(`/dashboard/department-view${qs}`);
+    const rows = data.data;
+    if (!rows.length) { document.getElementById('deptTable').innerHTML = '<p class="empty-state">No data</p>'; return; }
+    let html = '<div class="table-wrap"><table><thead><tr><th>Department</th><th>Total Equipment</th><th>Stopped Now</th><th>Open Breakdowns</th><th>Downtime Today (hrs)</th><th>Closed Today</th></tr></thead><tbody>';
+    rows.forEach(r => {
+      const avail = r.total_equipment > 0 ? Math.round((r.total_equipment - r.equipment_stopped_now) / r.total_equipment * 100) : 100;
+      html += `<tr>
+        <td><strong>${r.department}</strong></td>
+        <td>${r.total_equipment}</td>
+        <td><span class="${r.equipment_stopped_now > 0 ? 'badge badge-stopped' : 'badge badge-running'}">${r.equipment_stopped_now}</span></td>
+        <td><span class="${r.open_breakdowns > 0 ? 'badge badge-open' : 'badge badge-running'}">${r.open_breakdowns}</span></td>
+        <td>${(r.downtime_today_min / 60).toFixed(1)}h</td>
+        <td>${r.closed_today}</td>
+      </tr>`;
+    });
+    html += '</tbody></table></div>';
+    document.getElementById('deptTable').innerHTML = html;
+  } catch(e) {}
+}
+
+async function loadTrend(plant) {
+  try {
+    const qs = plant ? `&plant=${plant}` : '';
+    const data = await api(`/dashboard/trend?days=14${qs}`);
+    const rows = data.data;
+    const labels = rows.map(r => new Date(r.day).toLocaleDateString('en-IN', { day:'2-digit', month:'short' }));
+    const bds    = rows.map(r => parseInt(r.breakdowns));
+    const dtHrs  = rows.map(r => (parseInt(r.downtime_min) / 60).toFixed(1));
+
+    if (trendChart) trendChart.destroy();
+    trendChart = new Chart(document.getElementById('trendChart'), {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          { label: 'Breakdowns', data: bds, backgroundColor: 'rgba(220,38,38,.7)', borderRadius: 4, yAxisID: 'y' },
+          { label: 'Downtime (hrs)', data: dtHrs, type: 'line', borderColor: '#d97706', backgroundColor: 'rgba(217,119,6,.1)', fill: true, tension: .3, yAxisID: 'y1' }
+        ]
+      },
+      options: {
+        responsive: true, interaction: { mode: 'index' },
+        plugins: { legend: { position: 'top' } },
+        scales: {
+          y:  { beginAtZero: true, title: { display: true, text: 'Breakdowns' } },
+          y1: { beginAtZero: true, position: 'right', title: { display: true, text: 'Hrs' }, grid: { drawOnChartArea: false } }
+        }
+      }
+    });
+  } catch(e) { console.error(e); }
+}
+
+async function loadReasons(plant) {
+  try {
+    const qs = plant ? `&plant=${plant}` : '';
+    const data = await api(`/dashboard/top-reasons?days=30${qs}`);
+    const rows = data.data.slice(0, 8);
+    const colors = ['#dc2626','#d97706','#1e40af','#16a34a','#7c3aed','#0891b2','#be185d','#65a30d'];
+
+    if (reasonChart) reasonChart.destroy();
+    reasonChart = new Chart(document.getElementById('reasonChart'), {
+      type: 'doughnut',
+      data: {
+        labels: rows.map(r => r.description),
+        datasets: [{ data: rows.map(r => parseInt(r.count)), backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 12 } },
+          tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.raw} breakdowns` } }
+        }
+      }
+    });
+  } catch(e) { console.error(e); }
+}
+
+async function loadEqDowntime(plant) {
+  try {
+    const qs = plant ? `&plant=${plant}` : '';
+    const data = await api(`/dashboard/downtime-by-equipment?days=7${qs}`);
+    const rows = data.data.filter(r => r.total_downtime_min > 0).slice(0, 15);
+    if (!rows.length) {
+      document.getElementById('eqDowntimeTable').innerHTML = '<p class="empty-state">No downtime recorded in last 7 days</p>';
+      return;
+    }
+    const max = Math.max(...rows.map(r => parseInt(r.total_downtime_min)));
+    let html = '<div class="table-wrap"><table><thead><tr><th>#</th><th>Equipment</th><th>Dept</th><th>Breakdowns</th><th>Total Downtime</th><th>Avg per BD</th><th>Impact</th></tr></thead><tbody>';
+    rows.forEach((r, i) => {
+      const pct = max > 0 ? Math.round(r.total_downtime_min / max * 100) : 0;
+      html += `<tr>
+        <td style="font-weight:700;color:#64748b">${i+1}</td>
+        <td><strong>${r.name}</strong><div style="font-size:.75rem;color:#64748b">${r.code}</div></td>
+        <td style="font-size:.82rem">${r.department}</td>
+        <td style="text-align:center">${r.breakdown_count}</td>
+        <td><strong>${fmtDuration(r.total_downtime_min)}</strong></td>
+        <td>${fmtDuration(r.avg_downtime_min)}</td>
+        <td style="min-width:100px">
+          <div style="background:#e2e8f0;border-radius:99px;height:8px">
+            <div style="width:${pct}%;background:${pct>70?'#dc2626':pct>40?'#d97706':'#16a34a'};height:8px;border-radius:99px"></div>
+          </div>
+        </td>
+      </tr>`;
+    });
+    html += '</tbody></table></div>';
+    document.getElementById('eqDowntimeTable').innerHTML = html;
+  } catch(e) { console.error(e); }
+}
+
+async function loadOpenBds(plant) {
+  try {
+    const qs = plant ? `?plant=${plant}` : '';
+    const data = await api(`/breakdowns/open${qs}`);
+    const rows = data.data;
+    if (!rows.length) {
+      document.getElementById('openBdList').innerHTML = '<div class="empty-state" style="background:#f0fdf4;border-radius:8px"><div class="icon">✅</div><p style="color:#166534">No open breakdowns currently!</p></div>';
+      return;
+    }
+    let html = '<div class="table-wrap"><table><thead><tr><th>BD Number</th><th>Equipment</th><th>Department</th><th>Reason</th><th>Down Since</th><th>Duration</th><th>Status</th></tr></thead><tbody>';
+    rows.forEach(b => {
+      const mins = Math.round(b.current_downtime_minutes || 0);
+      html += `<tr>
+        <td><strong style="color:var(--warning)">${b.bd_number}</strong></td>
+        <td>${b.equipment_name}</td>
+        <td style="font-size:.82rem">${b.department}</td>
+        <td style="font-size:.82rem">${b.initial_reason || '—'}</td>
+        <td style="font-size:.82rem">${fmtDateTime(b.start_time)}</td>
+        <td><strong style="color:${mins>120?'var(--danger)':'var(--warning)'}">${fmtDuration(mins)}</strong></td>
+        <td><span class="badge badge-open">OPEN</span></td>
+      </tr>`;
+    });
+    html += '</tbody></table></div>';
+    document.getElementById('openBdList').innerHTML = html;
+  } catch(e) { console.error(e); }
+}
+
+// ── JOBS ─────────────────────────────────────────────────────
+let allJobs = [];
+
+async function loadJobs(plant) {
+  try {
+    const qs = plant ? `?plant=${plant}` : '';
+    const data = await api(`/jobs${qs}`);
+    // DON'T filter out COMPLETED - keep all statuses except maybe CLOSED if you want
+    allJobs = data.data || [];
+    updateJobsKpi();
+    renderJobsTable();
+  } catch(e) { 
+    console.error('loadJobs:', e);
+  }
+}
+
+function updateJobsKpi() {
+  const today = new Date().toISOString().slice(0,10);
+  let open = 0, assigned = 0, progress = 0, completed = 0;
+  
+  allJobs.forEach(j => {
+    const status = j.status || '';
+    if (status === 'OPEN') open++;
+    else if (status === 'ASSIGNED') assigned++;
+    else if (status === 'IN PROGRESS' || status === 'INPROGRESS') progress++;
+    else if (status === 'COMPLETED' || status === 'COMPLETE') completed++;  // Match both
+  });
+  
+  // Count closed today
+  const closedToday = allJobs.filter(j => 
+    j.status === 'CLOSED' && (j.closed_at || '').slice(0,10) === today
+  ).length;
+  
+  document.getElementById('jkOpen').textContent = open;
+  document.getElementById('jkAssigned').textContent = assigned;
+  document.getElementById('jkProgress').textContent = progress;
+  document.getElementById('jkCompleted').textContent = completed;
+  document.getElementById('jkClosedToday').textContent = closedToday;
+}
+
+function renderJobsTable() {
+  const filter = document.getElementById('jobsFilterSel')?.value || 'ALL';
+  
+  // Flexible filtering that matches database values
+  let filtered;
+  if (filter === 'ALL') {
+    filtered = allJobs;
+  } else {
+    filtered = allJobs.filter(j => {
+      const jobStatus = (j.status || '').toUpperCase().trim();
+      const filterValue = filter.toUpperCase().trim();
+      
+      // Handle COMPLETE (database uses COMPLETE, not COMPLETED)
+      if (filterValue === 'COMPLETED') {
+        return jobStatus === 'COMPLETED' || jobStatus === 'COMPLETE';
+      }
+      
+      // Handle IN PROGRESS variations
+      if (filterValue === 'IN PROGRESS') {
+        return jobStatus === 'IN PROGRESS' || jobStatus === 'INPROGRESS';
+      }
+      
+      // Exact match for others
+      return jobStatus === filterValue;
+    });
+  }
+
+  if (!filtered.length) {
+    document.getElementById('jobsList').innerHTML =
+      '<div class="empty-state" style="background:#f0fdf4;border-radius:8px"><div class="icon">✅</div><p style="color:#166534">No jobs found for this status</p></div>';
+    return;
+  }
+
+  const statusColor = { 
+    'OPEN': '#92400e', 
+    'ASSIGNED': '#1e40af', 
+    'IN PROGRESS': '#5b21b6',
+    'INPROGRESS': '#5b21b6',
+    'COMPLETED': '#166534',
+    'COMPLETE': '#166534',    // Match database value
+    'CLOSED': '#475569'
+  };
+  
+  const statusBg = { 
+    'OPEN': '#fef3c7', 
+    'ASSIGNED': '#dbeafe', 
+    'IN PROGRESS': '#ede9fe',
+    'INPROGRESS': '#ede9fe',
+    'COMPLETED': '#dcfce7',
+    'COMPLETE': '#dcfce7',    // Match database value
+    'CLOSED': '#f1f5f9'
+  };
+
+  let html = '<div class="table-wrap"><table><thead><tr>' +
+    '<th>Job No.</th><th>Title / Equipment</th><th>Raised By</th>' +
+    '<th>Plant · Shift</th><th>Status</th><th>Assigned Dept</th><th>Raised On</th>' +
+    '</tr></thead><tbody>';
+
+  filtered.forEach(j => {
+    const sc = statusColor[j.status] || '#475569';
+    const sb = statusBg[j.status] || '#f1f5f9';
+    const dt = new Date(j.created_at).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+    const fromStop = j.description
+      ? `<span style="font-size:.68rem;background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:6px;margin-left:4px">⚡ Stoppage</span>` : '';
+
+    html += `<tr>
+      <td style="font-family:monospace;font-size:.78rem;color:#1e40af;font-weight:700">${j.job_number||'—'}</td>
+      <td>
+        <strong style="font-size:.85rem">${j.title}${fromStop}</strong>
+        <div style="font-size:.75rem;color:#64748b;margin-top:2px">${j.equipment_code ? '🔧 '+j.equipment_code : ''} ${j.equipment_name||''}</div>
+      </td>
+      <td style="font-size:.82rem">${j.raised_by_name||'—'}<br><span style="font-size:.72rem;color:#94a3b8">${j.raised_by_dept||''}</span></td>
+      <td style="font-size:.8rem">${j.plant||'—'}<br><span style="color:#64748b">Shift ${j.shift||'—'}</span></td>
+      <td><span style="display:inline-block;padding:.22rem .65rem;border-radius:20px;font-size:.72rem;font-weight:700;background:${sb};color:${sc}">${j.status}</span></td>
+      <td style="font-size:.82rem">${j.assigned_dept
+        ? `<span style="color:#1e40af;font-weight:600">${j.assigned_dept}</span>`
+        : `<span style="color:#ef4444;font-size:.75rem">Unassigned</span>`}</td>
+      <td style="font-size:.78rem;color:#64748b">${dt}</td>
+    </tr>`;
+  });
+
+  html += '</tbody></table></div>';
+  document.getElementById('jobsList').innerHTML = html;
+}
+
+function logout() { clearSession(); window.location.href = '../login.html'; }
+init();
+</script>
+</body>
+</html>

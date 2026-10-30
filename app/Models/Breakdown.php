@@ -1,0 +1,4 @@
+<?php
+namespace App\Models;
+use Illuminate\Database\Eloquent\Model; use Illuminate\Database\Eloquent\Relations\BelongsTo;
+class Breakdown extends Model { protected $guarded=[]; public $timestamps=false; protected $hidden=['open_equipment_key']; protected function casts():array{return ['start_time'=>'datetime','end_time'=>'datetime','closed_at'=>'datetime','created_at'=>'datetime','updated_at'=>'datetime','downtime_minutes'=>'decimal:2'];} public function equipment():BelongsTo{return $this->belongsTo(Equipment::class);} public function shiftLog():BelongsTo{return $this->belongsTo(ShiftLog::class);} public function initialReason():BelongsTo{return $this->belongsTo(StopReason::class,'initial_reason_id');} public function closedBy():BelongsTo{return $this->belongsTo(User::class,'closed_by');} }

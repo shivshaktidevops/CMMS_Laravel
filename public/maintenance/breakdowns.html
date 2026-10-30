@@ -1,0 +1,2441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CMMS — Department Head</title>
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+  /* ── Tab bar ─────────────────────────────────────────────── */
+  .tab-bar {
+    display:flex; gap:0; margin-bottom:1.5rem;
+    border-bottom:2px solid #e2e8f0;
+  }
+  .tab-btn {
+    padding:.65rem 1.5rem; font-size:.92rem; font-weight:600;
+    border:none; background:none; cursor:pointer; font-family:inherit;
+    color:#64748b; border-bottom:3px solid transparent;
+    margin-bottom:-2px; transition:all .15s;
+  }
+  .tab-btn:hover { color:#1e40af; }
+  .tab-btn.active { color:#1e40af; border-bottom-color:#1e40af; }
+  .tab-content { display:none; }
+  .tab-content.active { display:block; }
+
+  /* ── Jobs tab styles ─────────────────────────────────────── */
+  .job-row {
+    display:grid;
+    grid-template-columns: 140px 1fr 110px 90px 120px 130px 160px;
+    gap:.5rem; align-items:center;
+    padding:.85rem 1rem; border-bottom:1px solid #f1f5f9;
+    font-size:.85rem; transition:background .1s;
+  }
+  .job-row:hover { background:#f8fafc; }
+  .job-row.header {
+    background:#f8fafc; font-size:.75rem; font-weight:700;
+    color:#64748b; text-transform:uppercase; letter-spacing:.05em;
+    border-bottom:2px solid #e2e8f0; padding:.6rem 1rem;
+  }
+  .job-row.priority-high   { border-left:3px solid #ef4444; }
+  .job-row.priority-medium { border-left:3px solid #f97316; }
+  .job-row.priority-low    { border-left:3px solid #22c55e; }
+
+  .jstatus {
+    display:inline-block; padding:.22rem .65rem; border-radius:20px;
+    font-size:.72rem; font-weight:700; white-space:nowrap;
+  }
+  .js-OPEN        { background:#fef3c7; color:#92400e; }
+  .js-ASSIGNED    { background:#dbeafe; color:#1e40af; }
+  .js-IN-PROGRESS { background:#ede9fe; color:#5b21b6; }
+  .js-COMPLETED   { background:#dcfce7; color:#166534; }
+  .js-CLOSED      { background:#f1f5f9; color:#475569; }
+  .js-REASSIGNED  { background:#fff7ed; color:#c2410c; border:1px solid #fed7aa; }
+
+  .job-filter-bar { display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; margin-bottom:1rem; }
+  .jfilter-btn {
+    padding:.3rem .8rem; border-radius:20px; border:2px solid #e2e8f0;
+    background:#fff; font-size:.78rem; font-weight:600; cursor:pointer;
+    transition:all .15s; font-family:inherit;
+  }
+  .jfilter-btn.active { border-color:#1e40af; background:#dbeafe; color:#1e40af; }
+
+  .btn-assign {
+    padding:.32rem .75rem; background:#1e40af; color:#fff; border:none;
+    border-radius:6px; cursor:pointer; font-family:inherit;
+    font-size:.78rem; font-weight:600; white-space:nowrap;
+  }
+  .btn-assign:hover { background:#1d4ed8; }
+  .param-summary-card {
+    background:#f0f9ff;
+    border-radius:12px;border:1px solid #bae6fd;
+    padding:1rem 1.25rem;margin-bottom:1.5rem;
+    box-shadow:0 1px 4px rgba(3,105,161,.08);
+  }
+  .param-summary-card .ps-header {
+    display:flex;justify-content:space-between;align-items:center;
+    margin-bottom:.85rem;padding-bottom:.65rem;
+    border-bottom:1px solid #bae6fd;
+  }
+  .ps-title { font-weight:700;font-size:.92rem;color:#0369a1;display:flex;align-items:center;gap:.5rem; }
+  .param-summary-badge { background:#0369a1;color:#fff;border-radius:20px;padding:.15rem .65rem;font-size:.75rem;font-weight:700; }
+  .ps-shift-row {
+    display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;
+    padding:.55rem .85rem;background:#fff;border-radius:8px;
+    margin-bottom:.4rem;font-size:.83rem;cursor:pointer;
+    border:1px solid #e2e8f0;transition:all .15s;
+  }
+  .ps-shift-row:hover { background:#dbeafe;border-color:#93c5fd;transform:translateX(3px); }
+  .ps-shift-label { background:#1e40af;color:#fff;border-radius:6px;padding:.15rem .55rem;font-size:.78rem;font-weight:700;min-width:62px;text-align:center; }
+
+  .btn-close-job {
+    padding:.32rem .75rem; background:#166534; color:#fff; border:none;
+    border-radius:6px; cursor:pointer; font-family:inherit;
+    font-size:.78rem; font-weight:600; white-space:nowrap;
+  }
+  .btn-close-job:hover { background:#15803d; }
+  .btn-progress {
+    padding:.32rem .75rem; background:#5b21b6; color:#fff; border:none;
+    border-radius:6px; cursor:pointer; font-family:inherit;
+    font-size:.78rem; font-weight:600; white-space:nowrap;
+  }
+
+  /* Jobs KPI row */
+  .jobs-kpi-row {
+    display:grid; grid-template-columns:repeat(5,1fr); gap:.75rem;
+    margin-bottom:1.25rem;
+  }
+  .jobs-kpi {
+    background:#fff; border-radius:10px; padding:.75rem 1rem;
+    border:1px solid #e2e8f0; text-align:center;
+    box-shadow:0 1px 3px rgba(0,0,0,.05);
+  }
+  .jobs-kpi .jkv { font-size:1.6rem; font-weight:800; font-variant-numeric:tabular-nums; }
+  .jobs-kpi .jkl { font-size:.72rem; color:#64748b; margin-top:2px; text-transform:uppercase; letter-spacing:.04em; }
+</style>
+</head>
+<body>
+
+<header class="cmms-header">
+  <div class="logo">🔧 Plant CMMS <span>Department Head Panel</span></div>
+  <div style="display:flex;align-items:center;gap:.75rem">
+    <div class="user-info" id="headerUser"></div>
+    <button class="btn btn-sm" style="background:#7c3aed;color:#fff;border:none;border-radius:8px;padding:.4rem .9rem;font-weight:600;cursor:pointer" onclick="window.location.href='../reports/reports.html'">📊 Reports</button>
+    <button class="btn-logout" onclick="logout()">Logout</button>
+  </div>
+</header>
+
+<!-- Shift / Plant / Dept info bar -->
+<div style="background:#f8fafc;border-bottom:1px solid #e2e8f0;padding:.55rem 1.5rem;display:flex;align-items:center;gap:1.75rem;font-size:.88rem;color:#475569">
+  <span>Current Shift: <strong id="infoShift" style="color:#3b82f6">—</strong></span>
+  <span>Plant: <strong id="infoPlant" style="color:#3b82f6">—</strong></span>
+  <span id="infoDeptWrap" style="display:none">Department: <strong id="infoDept" style="color:#3b82f6">—</strong></span>
+  <span>Date: <strong id="infoDate" style="color:#374151"></strong></span>
+</div>
+
+<div class="page">
+
+  <!-- Monitoring Activity Summary Card -->
+  <div class="param-summary-card" id="monitoringSummaryCard" style="display:none">
+    <div class="ps-header">
+      <div class="ps-title">
+        📡 Today's Monitoring Activity
+        <span class="param-summary-badge" id="msBadge">0 entries</span>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="openMonitoringDetailModal()"
+        style="font-size:.78rem;padding:.3rem .8rem">
+        View Details →
+      </button>
+    </div>
+    <div id="msSummaryList"></div>
+  </div>
+
+  <!-- KPI row — always visible -->
+  <div class="kpi-grid" id="kpiRow">
+    <div class="kpi-card kpi-red">  <div class="kpi-label">Open Breakdowns</div><div class="kpi-value" id="kpiOpen">—</div></div>
+    <div class="kpi-card kpi-orange"><div class="kpi-label">Longest Running</div><div class="kpi-value" id="kpiLongest">—</div><div class="kpi-sub">hrs downtime</div></div>
+    <div class="kpi-card kpi-green"><div class="kpi-label">Closed Today</div>   <div class="kpi-value" id="kpiClosedToday">—</div></div>
+    <div class="kpi-card kpi-blue"> <div class="kpi-label">Avg MTTR Today</div> <div class="kpi-value" id="kpiMttr">—</div><div class="kpi-sub">minutes</div></div>
+  </div>
+
+  <!-- ── TAB BAR ─────────────────────────────────────────── -->
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('breakdowns',this)">
+    Breakdowns
+    </button>
+    <button class="tab-btn" onclick="switchTab('jobs',this)" id="jobsTabBtn">
+    Jobs <span id="jobsBadge" style="background:#ef4444;color:#fff;border-radius:10px;padding:1px 7px;font-size:.7rem;margin-left:4px;display:none">0</span>
+    </button>
+    <!-- ADD THIS NEW TAB BUTTON -->
+    <button class="tab-btn" onclick="switchTab('genjobs',this)" id="genJobsTabBtn" style="display:none">
+        🏭 General Shift Jobs <span id="genJobsBadge" style="background:#f59e0b;color:#fff;border-radius:10px;padding:1px 7px;font-size:.7rem;margin-left:4px;display:none">0</span>
+    </button>
+</div>
+
+  <!-- ══════════════════════════════════════════════════════
+       TAB 1 — BREAKDOWNS (existing content, unchanged)
+  ═══════════════════════════════════════════════════════ -->
+  <div class="tab-content active" id="tab-breakdowns">
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:.5rem">
+      <div class="page-title" style="margin:0">Open Breakdowns — Pending Action</div>
+      <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
+        <div class="dept-filter" id="deptFilterBar">
+          <button class="dept-btn active" data-dept="All" onclick="filterDept(this)">All</button>
+          <!-- dynamic dept buttons injected here -->
+        </div>
+        <div style="position:relative">
+          <span style="position:absolute;left:.6rem;top:50%;transform:translateY(-50%);color:#94a3b8">🔍</span>
+          <input type="text" id="bdSearch" placeholder="Search equipment..." oninput="renderOpen()"
+            style="padding:.4rem .75rem .4rem 1.9rem;border:2px solid #e2e8f0;border-radius:8px;
+                   font-size:.82rem;font-family:inherit;width:200px"
+            onfocus="this.style.borderColor='#1e40af'" onblur="this.style.borderColor='#e2e8f0'">
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="loadAll()">🔄 Refresh</button>
+      </div>
+    </div>
+
+    <div id="openBdContainer"><div class="loading">Loading breakdowns...</div></div>
+
+    <div style="margin-top:2rem">
+      <div class="page-title" style="font-size:1rem">Closed Today</div>
+      <div id="closedContainer"><div class="loading">Loading...</div></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       TAB 2 — JOBS (common window)
+  ═══════════════════════════════════════════════════════ -->
+  <div class="tab-content" id="tab-jobs">
+
+    <!-- Jobs KPIs -->
+    <div class="jobs-kpi-row">
+      <div class="jobs-kpi" style="border-top:3px solid #92400e">
+        <div class="jkv" style="color:#92400e" id="jkOpen">—</div>
+        <div class="jkl">Open</div>
+      </div>
+      <div class="jobs-kpi" style="border-top:3px solid #1e40af">
+        <div class="jkv" style="color:#1e40af" id="jkAssigned">—</div>
+        <div class="jkl">Assigned</div>
+      </div>
+      <div class="jobs-kpi" style="border-top:3px solid #5b21b6">
+        <div class="jkv" style="color:#5b21b6" id="jkProgress">—</div>
+        <div class="jkl">In Progress</div>
+      </div>
+      <div class="jobs-kpi" style="border-top:3px solid #166534">
+        <div class="jkv" style="color:#166534" id="jkCompleted">—</div>
+        <div class="jkl">Completed</div>
+      </div>
+      <div class="jobs-kpi" style="border-top:3px solid #475569">
+        <div class="jkv" style="color:#475569" id="jkClosed">—</div>
+        <div class="jkl">Closed Today</div>
+      </div>
+    </div>
+
+    <!-- Filter + Refresh -->
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.75rem;margin-bottom:1rem;">
+      <div class="job-filter-bar" style="margin:0">
+        <span style="font-size:.8rem;color:#64748b;font-weight:600">Filter:</span>
+        <button class="jfilter-btn active" data-status="ALL"         onclick="filterJobs(this)">All</button>
+        <button class="jfilter-btn" data-status="OPEN"               onclick="filterJobs(this)">Open</button>
+        <button class="jfilter-btn" data-status="ASSIGNED"           onclick="filterJobs(this)">Assigned</button>
+        <button class="jfilter-btn" data-status="IN PROGRESS"        onclick="filterJobs(this)">In Progress</button>
+        <button class="jfilter-btn" data-status="COMPLETED"          onclick="filterJobs(this)">Completed</button>
+        <button class="jfilter-btn" data-status="CLOSED"             onclick="filterJobs(this)">Closed</button>
+      </div>
+      <div style="display:flex;gap:.5rem;align-items:center;">
+        <span style="font-size:.78rem;color:#94a3b8;" id="jobsLastUpdated"></span>
+        <button class="btn btn-primary btn-sm" onclick="loadJobs()">🔄 Refresh</button>
+      </div>
+    </div>
+
+    <!-- Jobs table -->
+    <div class="table-wrap" id="jobsTableWrap">
+      <div class="job-row header">
+        <div>Job No.</div>
+        <div>Equipment / Title</div>
+        <div>Raised By</div>
+        <div>Plant/Shift</div>
+        <div>Status</div>
+        <div>Assigned Dept</div>
+        <div>Actions</div>
+      </div>
+      <div id="jobsTableBody"><div class="loading" style="padding:2rem;text-align:center">Loading jobs...</div></div>
+    </div>
+
+  </div>
+  <!-- end tab-jobs -->
+
+<!-- end tab-jobs -->
+
+  <!-- ══════════════════════════════════════════════════════════
+       TAB 3 — GENERAL SHIFT JOBS (HOD Only, 9AM-6PM)
+  ══════════════════════════════════════════════════════════ -->
+  <div class="tab-content" id="tab-genjobs">
+    
+    <!-- Shift Restriction Banner -->
+    <div id="genShiftWarning" style="display:none;background:#fee2e2;border:1px solid #fecaca;border-radius:12px;padding:1rem;margin-bottom:1rem;text-align:center">
+      <div style="font-size:1rem;margin-bottom:.5rem">⏰ General Shift Only (9:00 AM – 6:00 PM)</div>
+      <div style="font-size:.85rem;color:#991b1b">This module is only accessible during General Shift hours. Please come back between 9 AM and 6 PM.</div>
+    </div>
+
+    <div id="genJobsContent" style="display:none">
+      
+      <!-- HOD Info & Controls -->
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.75rem;margin-bottom:1rem">
+        <div>
+          <div class="page-title" style="margin:0">🏭 General Shift Jobs</div>
+          <div style="font-size:.78rem;color:#64748b;margin-top:.2rem">
+            Fabrication, Major Repairs, Shutdown Works — <strong>General Shift Only (9AM-6PM)</strong>
+          </div>
+        </div>
+        <div style="display:flex;gap:.5rem">
+          <button class="btn btn-primary" id="raiseGenJobBtn" onclick="openGenJobModal()" style="background:#f59e0b;border-color:#f59e0b">
+            + Raise General Shift Job
+          </button>
+          <button class="btn btn-outline btn-sm" onclick="loadGenJobs()">🔄 Refresh</button>
+        </div>
+      </div>
+
+      <!-- Gen Jobs KPIs -->
+      <div class="jobs-kpi-row" style="grid-template-columns:repeat(4,1fr)">
+        <div class="jobs-kpi" style="border-top:3px solid #f59e0b">
+          <div class="jkv" style="color:#f59e0b" id="genOpenCount">—</div>
+          <div class="jkl">Open</div>
+        </div>
+        <div class="jobs-kpi" style="border-top:3px solid #5b21b6">
+          <div class="jkv" style="color:#5b21b6" id="genProgressCount">—</div>
+          <div class="jkl">In Progress</div>
+        </div>
+        <div class="jobs-kpi" style="border-top:3px solid #166534">
+          <div class="jkv" style="color:#166534" id="genCompletedCount">—</div>
+          <div class="jkl">Completed</div>
+        </div>
+        <div class="jobs-kpi" style="border-top:3px solid #475569">
+          <div class="jkv" style="color:#475569" id="genClosedCount">—</div>
+          <div class="jkl">Closed</div>
+        </div>
+      </div>
+
+      <!-- Gen Jobs Filter -->
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.75rem;margin-bottom:1rem;">
+        <div class="job-filter-bar" style="margin:0">
+          <span style="font-size:.8rem;color:#64748b;font-weight:600">Filter:</span>
+          <button class="jfilter-btn active" data-gen-status="ALL" onclick="filterGenJobs(this)">All</button>
+          <button class="jfilter-btn" data-gen-status="OPEN" onclick="filterGenJobs(this)">Open</button>
+          <button class="jfilter-btn" data-gen-status="IN PROGRESS" onclick="filterGenJobs(this)">In Progress</button>
+          <button class="jfilter-btn" data-gen-status="COMPLETED" onclick="filterGenJobs(this)">Completed</button>
+          <button class="jfilter-btn" data-gen-status="CLOSED" onclick="filterGenJobs(this)">Closed</button>
+        </div>
+        <div style="font-size:.78rem;color:#94a3b8" id="genJobsLastUpdated"></div>
+      </div>
+
+      <!-- Gen Jobs Table -->
+      <div class="table-wrap" id="genJobsTableWrap">
+        <div class="job-row header" style="grid-template-columns:130px 1fr 120px 100px 100px 140px">
+          <div>Job No.</div>
+          <div>Title / Description</div>
+          <div>Raised By</div>
+          <div>Date</div>
+          <div>Status</div>
+          <div>Actions</div>
+        </div>
+        <div id="genJobsTableBody"><div class="loading" style="padding:2rem;text-align:center">Loading...</div></div>
+      </div>
+
+    </div>
+  </div>	
+
+</div><!-- end .page -->
+
+<!-- ── BD UPDATE/CLOSE MODAL (unchanged) ──────────────────── -->
+<div class="modal-overlay" id="bdModal">
+  <div class="modal" style="max-width:620px">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="modalTitle">Breakdown Details</div>
+        <div style="font-size:.8rem;color:#64748b;margin-top:.1rem" id="modalBdNum"></div>
+      </div>
+      <button class="modal-close" onclick="closeBdModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:#f8fafc;border-radius:8px;padding:.9rem;margin-bottom:1.25rem;border:1px solid #e2e8f0">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;font-size:.85rem">
+          <div><span style="color:#64748b">Equipment:</span> <strong id="m_equip"></strong></div>
+          <div><span style="color:#64748b">Location:</span> <span id="m_loc"></span></div>
+          <div><span style="color:#64748b">Start Time:</span> <span id="m_start"></span></div>
+          <div><span style="color:#64748b">Initial Reason:</span> <span id="m_reason"></span></div>
+          <div style="grid-column:1/-1"><span style="color:#64748b">Current Downtime:</span> <strong id="m_downtime" style="color:var(--danger)"></strong></div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Findings (What was found?) *</label>
+        <textarea class="form-control" id="m_findings" placeholder="Describe what you found when you investigated the issue..." rows="3"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Actions Taken</label>
+        <textarea class="form-control" id="m_actions" placeholder="What was done to fix the problem?" rows="3"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Spares / Parts Used</label>
+        <textarea class="form-control" id="m_spares" placeholder="e.g. Bearing 6205 × 2, V-Belt B72 × 1" rows="2"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Resolution Notes</label>
+        <textarea class="form-control" id="m_resolution" placeholder="Final status after repair / next steps..." rows="2"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">📸 Photos (optional, max 5)</label>
+        <input type="file" id="bdPhotos" accept="image/*" multiple style="display:none" onchange="previewBdPhotos(this)">
+        <button type="button" class="btn btn-outline" style="width:100%;border-style:dashed" onclick="document.getElementById('bdPhotos').click()">
+          📷 Click to attach photos
+        </button>
+        <div id="bdPhotoPreview" style="display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.5rem"></div>
+        <div id="existingPhotos" style="display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.5rem"></div>
+        <div style="font-size:.75rem;color:#94a3b8;margin-top:.25rem">Accepted: JPG, PNG, WEBP · Max 10MB each</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeBdModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveUpdate()">💾 Save Update</button>
+      <button class="btn btn-success" onclick="closeBreakdown()">✅ Close Breakdown</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── JOB ASSIGN MODAL ────────────────────────────────────── -->
+<div class="modal-overlay" id="assignModal">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <div class="modal-title">📋 Assign Job to Department</div>
+      <button class="modal-close" onclick="closeAssignModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="aJobId">
+      <div style="background:#f8fafc;border-radius:8px;padding:.85rem;margin-bottom:1rem;border:1px solid #e2e8f0">
+        <strong id="aJobTitle" style="font-size:.92rem"></strong>
+        <div id="aJobNumber" style="font-size:.75rem;color:#94a3b8;font-family:monospace;margin-top:.2rem"></div>
+        <div id="aJobEquip"  style="font-size:.8rem;color:#64748b;margin-top:.2rem"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Assign to Department(s) *
+          <span style="font-size:.75rem;color:#64748b;font-weight:400"> — select one or more</span>
+        </label>
+        <div id="aDeptCheckboxes" style="border:1px solid #e2e8f0;border-radius:8px;padding:.6rem .8rem;max-height:160px;overflow-y:auto;background:#f8fafc">
+          <!-- populated dynamically -->
+          <div style="color:#94a3b8;font-size:.85rem">Loading departments...</div>
+        </div>
+        <div id="aMultiNote" style="display:none;margin-top:.4rem;font-size:.76rem;color:#7c3aed;background:#f5f3ff;padding:.4rem .7rem;border-radius:6px;border:1px solid #ddd6fe">
+          ⚡ Multi-department assignment — job closes only when ALL departments complete their part
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Remarks (optional)</label>
+        <textarea class="form-control" id="aRemarks" rows="2" placeholder="Assignment instructions or notes..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeAssignModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmAssign()">Assign →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── JOB STATUS MODAL ────────────────────────────────────── -->
+<div class="modal-overlay" id="jobStatusModal">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <div class="modal-title">✏️ Update Job Status</div>
+      <button class="modal-close" onclick="closeJobStatusModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="sJobId">
+      <div style="background:#f8fafc;border-radius:8px;padding:.85rem;margin-bottom:1rem;border:1px solid #e2e8f0">
+        <strong id="sJobTitle" style="font-size:.92rem"></strong>
+        <div id="sJobNumber" style="font-size:.75rem;color:#94a3b8;font-family:monospace;margin-top:.2rem"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">New Status *</label>
+        <select class="form-control" id="sStatus">
+          <option value="">— Select —</option>
+          <option value="IN PROGRESS">IN PROGRESS</option>
+          <option value="COMPLETED">COMPLETED</option>
+          <option value="CLOSED">CLOSED</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Remarks</label>
+        <textarea class="form-control" id="sRemarks" rows="2" placeholder="Update notes..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeJobStatusModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmJobStatus()">✅ Update</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── JOB DETAIL / PHOTOS MODAL ──────────────────────────── -->
+<div class="modal-overlay" id="jobDetailModal">
+  <div class="modal" style="max-width:580px">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="jd_title">Job Details</div>
+        <div style="font-size:.78rem;color:#94a3b8;font-family:monospace;margin-top:.1rem" id="jd_number"></div>
+      </div>
+      <button class="modal-close" onclick="closeJobDetail()">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- Info grid -->
+      <div style="background:#f8fafc;border-radius:8px;padding:.9rem;margin-bottom:1.25rem;border:1px solid #e2e8f0">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;font-size:.85rem">
+          <div><span style="color:#64748b">Equipment:</span> <strong id="jd_equip"></strong></div>
+          <div><span style="color:#64748b">Department:</span> <span id="jd_dept"></span></div>
+          <div><span style="color:#64748b">Raised By:</span> <span id="jd_raised"></span></div>
+          <div><span style="color:#64748b">Plant / Shift:</span> <span id="jd_plant"></span></div>
+          <div><span style="color:#64748b">Status:</span> <span id="jd_status"></span></div>
+          <div><span style="color:#64748b">Created:</span> <span id="jd_created"></span></div>
+          <div style="grid-column:1/-1"><span style="color:#64748b">Assigned To:</span> <strong id="jd_assigned" style="color:#1e40af"></strong></div>
+        </div>
+      </div>
+
+      <!-- Description -->
+      <div id="jd_desc_wrap" style="display:none;margin-bottom:1rem">
+        <div style="font-size:.78rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.35rem">Description</div>
+        <div id="jd_desc" style="font-size:.88rem;color:#334155;background:#f8fafc;padding:.75rem;border-radius:8px;border:1px solid #e2e8f0"></div>
+      </div>
+
+      <!-- Remarks -->
+      <div id="jd_remarks_wrap" style="display:none;margin-bottom:1rem">
+        <div style="font-size:.78rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.35rem">Remarks</div>
+        <div id="jd_remarks" style="font-size:.88rem;color:#475569;font-style:italic;background:#f8fafc;padding:.75rem;border-radius:8px;border:1px solid #e2e8f0"></div>
+      </div>
+
+      <!-- Photos -->
+      <div>
+        <div style="font-size:.78rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.5rem">📸 Attached Photos</div>
+        <div id="jd_photos" style="display:flex;flex-wrap:wrap;gap:.6rem;">
+          <div style="color:#94a3b8;font-size:.85rem">No photos attached</div>
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeJobDetail()">Close</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ── Reassign Job Modal ─────────────────────────────────── -->
+<div class="modal-overlay" id="reassignModal">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <div class="modal-title">🔀 Reassign Job to Another Department</div>
+      <button class="modal-close" onclick="closeReassignModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="rJobId">
+      <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:.85rem;margin-bottom:1rem">
+        <strong id="rJobTitle" style="font-size:.92rem"></strong>
+        <div id="rJobNumber" style="font-size:.75rem;color:#92400e;font-family:monospace;margin-top:.2rem"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Currently Assigned To</label>
+        <input class="form-control" id="rFromDept" disabled style="background:#f8fafc;color:#64748b">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Reassign To Department *</label>
+        <select class="form-control" id="rToDept">
+          <option value="">— Select Department —</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Handover Remarks *</label>
+        <textarea class="form-control" id="rRemarks" rows="3"
+          placeholder="Describe what was done and what needs to be done next..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeReassignModal()">Cancel</button>
+      <button class="btn btn-primary" style="background:#f59e0b;border-color:#f59e0b" onclick="confirmReassign()">🔀 Reassign Job</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Dept Status Update Modal (Multi-assign) ────────────── -->
+<div class="modal-overlay" id="deptStatusModal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <div class="modal-title">⚡ Update Department Status</div>
+      <button class="modal-close" onclick="closeDeptStatusModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="dsJobId">
+      <input type="hidden" id="dsDept">
+      <div style="background:#f8fafc;border-radius:8px;padding:.85rem;margin-bottom:1rem;border:1px solid #e2e8f0">
+        <strong id="dsJobTitle" style="font-size:.92rem"></strong>
+        <div id="dsJobNumber" style="font-size:.75rem;color:#94a3b8;font-family:monospace;margin-top:.2rem"></div>
+        <div style="margin-top:.4rem;font-size:.82rem;color:#7c3aed;font-weight:600">
+          Department: <span id="dsDeptLabel"></span>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">New Status *</label>
+        <select class="form-control" id="dsStatus">
+          <option value="">— Select —</option>
+          <option value="IN PROGRESS">IN PROGRESS</option>
+          <option value="COMPLETED">COMPLETED</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Remarks</label>
+        <textarea class="form-control" id="dsRemarks" rows="2" placeholder="What was done..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeDeptStatusModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmDeptStatus()">✅ Update</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Job History / Trail Modal ──────────────────────────── -->
+<div class="modal-overlay" id="historyModal">
+  <div class="modal" style="max-width:600px">
+    <div class="modal-header">
+      <div class="modal-title">📋 Job Trail</div>
+      <button class="modal-close" onclick="closeHistoryModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="hJobTitle" style="font-weight:700;font-size:.95rem;margin-bottom:1rem;padding:.75rem;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0"></div>
+      <div id="historyTrail"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeHistoryModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- Parameter Detail Modal -->
+<div class="modal-overlay" id="monitoringDetailModal">
+  <div class="modal" style="max-width:700px;max-height:85vh;overflow-y:auto">
+    <div class="modal-header">
+      <div class="modal-title">📊 Monitoring Logs — Last 24 Hours</div>
+      <button class="modal-close" onclick="closeMonitoringDetailModal()">✕</button>
+    </div>
+    <div class="modal-body" id="monitoringDetailBody">
+      <div class="loading">Loading...</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeMonitoringDetailModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/cmms.js"></script>
+<script>
+// ── Local helpers (in case not in cmms.js) ───────────────────
+function fmtDuration(mins) {
+  if (!mins || mins < 0) return '0m';
+  const h = Math.floor(mins / 60);
+  const m = Math.round(mins % 60);
+  return h > 0 ? h + 'h ' + m + 'm' : m + 'm';
+}
+
+function fmtDateTime(ts) {
+  if (!ts) return '—';
+  return new Date(ts).toLocaleString('en-GB', {
+    day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'
+  });
+}
+
+// ── State ─────────────────────────────────────────────────────
+let user;
+let openBds = [], closedBds = [];
+let allJobs = [], currentJobFilter = 'ALL';
+let allDepartments = [];
+let currentDept = 'All';
+let currentBdId = null;
+let dtInterval = null;
+
+// ── String escape helpers ─────────────────────────────────────
+function escJ(s) { return String(s||'').replace(/&/g,'&amp;').replace(/'/g,'&#39;').replace(/"/g,'&quot;'); }
+function escHtml(s) { return (s||'').replace(/'/g,"\'"); }
+
+function getRoleLabel(role) {
+  if (role === 'operator') return 'Shift-in-Charge';
+  if (role === 'maintenance') return 'Department Head';
+  return role;
+}
+
+// ══════════════════════════════════════════════════════════════
+// GENERAL SHIFT JOBS MODULE (HOD Only, 9AM-6PM)
+// ══════════════════════════════════════════════════════════════
+
+let allGenJobs = [];
+let currentGenFilter = 'ALL';
+
+function isGeneralShift() {
+  const now = new Date();
+  const hours = now.getHours();
+  return hours >= 9 && hours < 18;
+}
+
+function canAccessGenJobs() {
+  return user && user.role === 'maintenance' && isGeneralShift();
+}
+
+function updateGenJobsTabVisibility() {
+  const genJobsTab = document.getElementById('genJobsTabBtn');
+  const warningBanner = document.getElementById('genShiftWarning');
+  const content = document.getElementById('genJobsContent');
+  const canAccess = canAccessGenJobs();
+  
+  if (genJobsTab) {
+    genJobsTab.style.display = canAccess ? 'inline-block' : 'none';
+  }
+  
+  if (warningBanner && content) {
+    if (!canAccess && user && user.role === 'maintenance') {
+      warningBanner.style.display = 'block';
+      content.style.display = 'none';
+    } else if (canAccess) {
+      warningBanner.style.display = 'none';
+      content.style.display = 'block';
+    } else {
+      warningBanner.style.display = 'none';
+      content.style.display = 'none';
+    }
+  }
+}
+
+async function loadGenJobs() {
+  if (!canAccessGenJobs()) return;
+  
+  try {
+    const plant = user.selectedPlant || user.plant || '100TPD';
+    const data = await api(`/general-shift-jobs?plant=${plant}`);
+    allGenJobs = data.data || [];
+    updateGenJobsKpi();
+    renderGenJobs();
+    const updatedEl = document.getElementById('genJobsLastUpdated');
+    if (updatedEl) {
+      updatedEl.textContent = 'Updated ' + new Date().toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit'});
+    }
+  } catch(e) {
+    console.error('loadGenJobs error:', e);
+    const bodyEl = document.getElementById('genJobsTableBody');
+    if (bodyEl) {
+      bodyEl.innerHTML = '<div style="text-align:center;padding:2rem;color:#dc2626">❌ ' + e.message + '</div>';
+    }
+  }
+}
+
+function updateGenJobsKpi() {
+  const counts = { OPEN: 0, 'IN PROGRESS': 0, COMPLETED: 0, CLOSED: 0 };
+  allGenJobs.forEach(j => {
+    if (counts[j.status] !== undefined) counts[j.status]++;
+  });
+  const openEl = document.getElementById('genOpenCount');
+  if (openEl) openEl.textContent = counts.OPEN;
+  const progressEl = document.getElementById('genProgressCount');
+  if (progressEl) progressEl.textContent = counts['IN PROGRESS'];
+  const completedEl = document.getElementById('genCompletedCount');
+  if (completedEl) completedEl.textContent = counts.COMPLETED;
+  const closedEl = document.getElementById('genClosedCount');
+  if (closedEl) closedEl.textContent = counts.CLOSED;
+  
+  const badge = document.getElementById('genJobsBadge');
+  if (badge) {
+    if (counts.OPEN > 0) {
+      badge.textContent = counts.OPEN;
+      badge.style.display = 'inline';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+}
+
+function filterGenJobs(btn) {
+  document.querySelectorAll('#tab-genjobs .jfilter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentGenFilter = btn.dataset.genStatus;
+  renderGenJobs();
+}
+
+function renderGenJobs() {
+  const filtered = currentGenFilter === 'ALL' ? allGenJobs : allGenJobs.filter(j => j.status === currentGenFilter);
+  const bodyEl = document.getElementById('genJobsTableBody');
+  if (!bodyEl) return;
+  
+  if (!filtered.length) {
+    bodyEl.innerHTML = '<div style="text-align:center;padding:2.5rem;color:#94a3b8"><div style="font-size:1.8rem">📋</div><p>No general shift jobs found</p><button class="btn btn-primary btn-sm" onclick="openGenJobModal()" style="margin-top:1rem;background:#f59e0b;border-color:#f59e0b">+ Raise First Job</button></div>';
+    return;
+  }
+  
+  let html = '';
+  for (let i = 0; i < filtered.length; i++) {
+    const j = filtered[i];
+    const statusClass = j.status.replace(/ /g, '-');
+    const createdDate = new Date(j.created_at).toLocaleDateString('en-GB', {day:'2-digit', month:'short'});
+    
+    let actions = '';
+    if (j.status === 'OPEN') {
+      actions = '<button class="btn btn-sm" style="background:#5b21b6;color:#fff;padding:.3rem .7rem;border-radius:6px;border:none;cursor:pointer;font-size:.75rem" onclick="openGenJobStatusModal(' + j.id + ', \'' + escJ(j.title) + '\', \'' + j.job_number + '\', \'OPEN\')">▶️ Start Progress</button>';
+    } else if (j.status === 'IN PROGRESS') {
+      actions = '<button class="btn btn-sm" style="background:#166534;color:#fff;padding:.3rem .7rem;border-radius:6px;border:none;cursor:pointer;font-size:.75rem" onclick="openGenJobStatusModal(' + j.id + ', \'' + escJ(j.title) + '\', \'' + j.job_number + '\', \'IN PROGRESS\')">✅ Mark Complete</button>';
+    } else if (j.status === 'COMPLETED') {
+      actions = '<button class="btn btn-sm" style="background:#475569;color:#fff;padding:.3rem .7rem;border-radius:6px;border:none;cursor:pointer;font-size:.75rem" onclick="openGenJobStatusModal(' + j.id + ', \'' + escJ(j.title) + '\', \'' + j.job_number + '\', \'COMPLETED\')">🔒 Close Job</button>';
+    }
+    
+    html += '<div class="job-row" style="grid-template-columns:130px 1fr 120px 100px 100px 140px">';
+    html += '<div><span style="font-family:monospace;font-size:.78rem;font-weight:700">' + (j.job_number || '—') + '</span></div>';
+    html += '<div><div style="font-weight:600;font-size:.85rem">' + escapeHtml(j.title) + '</div>';
+    if (j.description) {
+      html += '<div style="font-size:.72rem;color:#64748b;margin-top:2px">' + escapeHtml(j.description.substring(0, 60)) + (j.description.length > 60 ? '...' : '') + '</div>';
+    }
+    html += '</div>';
+    html += '<div style="font-size:.82rem">' + (j.raised_by_name || '—') + '</div>';
+    html += '<div style="font-size:.78rem">' + createdDate + '</div>';
+    html += '<div><span class="jstatus js-' + statusClass + '">' + j.status + '</span></div>';
+    html += '<div>' + actions + '</div>';
+    html += '</div>';
+  }
+  bodyEl.innerHTML = html;
+}
+
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return str.replace(/[&<>]/g, function(m) {
+    if (m === '&') return '&amp;';
+    if (m === '<') return '&lt;';
+    if (m === '>') return '&gt;';
+    return m;
+  });
+}
+
+function openGenJobStatusModal(jobId, title, jobNumber, currentStatus) {
+  let newStatus = '';
+  let actionText = '';
+  let modalTitle = '';
+  
+  if (currentStatus === 'OPEN') {
+    newStatus = 'IN PROGRESS';
+    actionText = 'Start Progress';
+    modalTitle = '▶️ Start Progress';
+  } else if (currentStatus === 'IN PROGRESS') {
+    newStatus = 'COMPLETED';
+    actionText = 'Mark Complete';
+    modalTitle = '✅ Mark Complete';
+  } else if (currentStatus === 'COMPLETED') {
+    newStatus = 'CLOSED';
+    actionText = 'Close Job';
+    modalTitle = '🔒 Close Job';
+  }
+  
+  // Create modal HTML
+  const modalHtml = `
+    <div id="genJobStatusModal" class="modal-overlay" style="display:flex;align-items:center;justify-content:center;z-index:1002">
+      <div class="modal" style="max-width:500px;width:90%;background:white;border-radius:12px">
+        <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;padding:1rem 1.25rem;border-bottom:1px solid #e2e8f0">
+          <div class="modal-title" style="font-weight:700;font-size:1.1rem">${modalTitle}</div>
+          <button class="modal-close" onclick="closeGenJobStatusModal()" style="background:none;border:none;font-size:1.2rem;cursor:pointer">✕</button>
+        </div>
+        <div class="modal-body" style="padding:1.25rem">
+          <div style="background:#f8fafc;border-radius:8px;padding:.85rem;margin-bottom:1rem;border:1px solid #e2e8f0">
+            <div><strong>Job:</strong> ${escapeHtml(title)}</div>
+            <div style="font-size:.78rem;color:#64748b;margin-top:.2rem">Job Number: ${jobNumber}</div>
+            <div style="margin-top:.4rem">
+              <span class="sbadge s-${currentStatus.replace(/ /g, '-')}">${currentStatus}</span>
+              <span style="margin-left:.5rem">→</span>
+              <span class="sbadge" style="background:#f59e0b;color:#fff">${newStatus}</span>
+            </div>
+          </div>
+          
+          <div class="form-group" style="margin-bottom:1rem">
+            <label class="form-label" style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:0.35rem">Remarks *</label>
+            <textarea class="form-control" id="statusRemarks" rows="3" placeholder="Describe what was done..." style="width:100%;padding:0.5rem 0.75rem;border:1px solid #e2e8f0;border-radius:6px"></textarea>
+          </div>
+          
+          <div class="form-group" style="margin-bottom:1rem">
+            <label class="form-label" style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:0.35rem">📸 Photos (optional, max 5)</label>
+            <input type="file" id="statusPhotos" accept="image/*" multiple style="display:none">
+            <button type="button" class="btn btn-outline" style="width:100%;border-style:dashed;padding:0.5rem 1rem;border-radius:6px;cursor:pointer;background:white;border:1px solid #e2e8f0" onclick="document.getElementById('statusPhotos').click()">
+              📷 Click to attach photos
+            </button>
+            <div id="statusPhotoPreview" style="display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.5rem"></div>
+          </div>
+        </div>
+        <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:0.75rem;padding:1rem 1.25rem;border-top:1px solid #e2e8f0">
+          <button class="btn btn-outline" onclick="closeGenJobStatusModal()" style="padding:0.5rem 1rem;border-radius:6px;cursor:pointer;background:white;border:1px solid #e2e8f0">Cancel</button>
+          <button class="btn btn-primary" onclick="confirmGenJobStatus('${jobId}', '${newStatus}')" style="background:#f59e0b;padding:0.5rem 1rem;border-radius:6px;cursor:pointer;color:white;font-weight:600;border:none">
+            ${actionText}
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  // Remove existing modal if present
+  const existingModal = document.getElementById('genJobStatusModal');
+  if (existingModal) {
+    existingModal.remove();
+  }
+  
+  // Add modal to body
+  document.body.insertAdjacentHTML('beforeend', modalHtml);
+  
+  // Setup photo preview
+  const photosInput = document.getElementById('statusPhotos');
+  if (photosInput) {
+    photosInput.onchange = function(e) {
+      const preview = document.getElementById('statusPhotoPreview');
+      preview.innerHTML = '';
+      const files = Array.from(e.target.files).slice(0,5);
+      for (let i = 0; i < files.length; i++) {
+        const reader = new FileReader();
+        reader.onload = function(ev) {
+          preview.innerHTML += '<img src="' + ev.target.result + '" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0">';
+        };
+        reader.readAsDataURL(files[i]);
+      }
+    };
+  }
+}
+
+// Close the status modal
+function closeGenJobStatusModal() {
+  const modal = document.getElementById('genJobStatusModal');
+  if (modal) {
+    modal.remove();
+  }
+}
+
+// Confirm and execute status update with photos
+async function confirmGenJobStatus(jobId, newStatus) {
+  const remarks = document.getElementById('statusRemarks')?.value.trim();
+  if (!remarks) {
+    showToast('Remarks are required', 'error');
+    return;
+  }
+  
+  const btn = document.querySelector('#genJobStatusModal .btn-primary');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = 'Updating...';
+  }
+  
+  try {
+    // Upload photos if any
+    let photoUrls = [];
+    const photosInput = document.getElementById('statusPhotos');
+    if (photosInput && photosInput.files.length) {
+      const formData = new FormData();
+      const files = Array.from(photosInput.files).slice(0,5);
+      for (let i = 0; i < files.length; i++) {
+        formData.append('photos', files[i]);
+      }
+      const token = getToken();
+      const res = await fetch(API_BASE.replace('/api','') + '/api/upload', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + token },
+        body: formData
+      });
+      const uploadData = await res.json();
+      photoUrls = uploadData.files || [];
+    }
+    
+    // Update status with remarks
+    await api('/general-shift-jobs/' + jobId + '/status', {
+      method: 'PATCH',
+      body: JSON.stringify({ status: newStatus, remarks: remarks })
+    });
+    
+    let successMessage = '';
+    if (newStatus === 'IN PROGRESS') successMessage = '✅ Job started';
+    else if (newStatus === 'COMPLETED') successMessage = '✅ Job marked as completed';
+    else successMessage = '✅ Job closed';
+    
+    showToast(successMessage);
+    closeGenJobStatusModal();
+    await loadGenJobs();
+    
+  } catch(e) {
+    showToast(e.message, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = 'Update';
+    }
+  }
+}
+
+// ⬇️⬇️⬇️ ADD THESE THREE FUNCTIONS HERE ⬇️⬇️⬇️
+
+// Open Raise General Job Modal
+function openGenJobModal() {
+    if (!canAccessGenJobs()) {
+        showToast('General Shift Jobs are only available between 9 AM and 6 PM', 'error');
+        return;
+    }
+    
+    // Create modal HTML
+    const modalHtml = `
+        <div id="genJobFormModal" class="modal-overlay" style="display:flex;align-items:center;justify-content:center;z-index:1001">
+            <div class="modal" style="max-width:550px;width:90%;background:white;border-radius:12px">
+                <div class="modal-header" style="display:flex;justify-content:space-between;align-items:center;padding:1rem 1.25rem;border-bottom:1px solid #e2e8f0">
+                    <div class="modal-title" style="font-weight:700;font-size:1.1rem">🏭 Raise General Shift Job</div>
+                    <button class="modal-close" onclick="closeGenJobFormModal()" style="background:none;border:none;font-size:1.2rem;cursor:pointer">✕</button>
+                </div>
+                <div class="modal-body" style="padding:1.25rem">
+                    <div style="background:#fefce8;border:1px solid #fde68a;border-radius:8px;padding:.75rem;margin-bottom:1rem">
+                        <div style="font-size:.82rem;color:#92400e;display:flex;align-items:center;gap:.5rem">
+                            <span>⏰</span> General Shift Only · Fabrication / Major Repairs
+                        </div>
+                    </div>
+                    
+                    <div class="form-group" style="margin-bottom:1rem">
+                        <label class="form-label" style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:0.35rem">Job Title *</label>
+                        <input type="text" class="form-control" id="genJobTitle" placeholder="e.g., Fabrication of conveyor chute" style="width:100%;padding:0.5rem 0.75rem;border:1px solid #e2e8f0;border-radius:6px">
+                    </div>
+                    
+                    <div class="form-group" style="margin-bottom:1rem">
+                        <label class="form-label" style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:0.35rem">Description</label>
+                        <textarea class="form-control" id="genJobDesc" rows="3" placeholder="Detailed work description..." style="width:100%;padding:0.5rem 0.75rem;border:1px solid #e2e8f0;border-radius:6px"></textarea>
+                    </div>
+                    
+                    <div class="form-group" style="margin-bottom:1rem">
+                        <label class="form-label" style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:0.35rem">Expected Completion Date</label>
+                        <input type="date" class="form-control" id="genJobExpectedDate" style="width:100%;padding:0.5rem 0.75rem;border:1px solid #e2e8f0;border-radius:6px">
+                    </div>
+                    
+                    <div class="form-group" style="margin-bottom:1rem">
+                        <label class="form-label" style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:0.35rem">Remarks</label>
+                        <textarea class="form-control" id="genJobRemarks" rows="2" placeholder="Any additional notes..." style="width:100%;padding:0.5rem 0.75rem;border:1px solid #e2e8f0;border-radius:6px"></textarea>
+                    </div>
+                    
+                    <div class="form-group" style="margin-bottom:1rem">
+                        <label class="form-label" style="display:block;font-size:0.85rem;font-weight:600;margin-bottom:0.35rem">📸 Photos (optional, max 5)</label>
+                        <input type="file" id="genJobPhotos" accept="image/*" multiple style="display:none">
+                        <button type="button" class="btn btn-outline" style="width:100%;border-style:dashed;padding:0.5rem 1rem;border-radius:6px;cursor:pointer;background:white;border:1px solid #e2e8f0" onclick="document.getElementById('genJobPhotos').click()">
+                            📷 Click to attach photos
+                        </button>
+                        <div id="genJobPhotoPreview" style="display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.5rem"></div>
+                    </div>
+                </div>
+                <div class="modal-footer" style="display:flex;justify-content:flex-end;gap:0.75rem;padding:1rem 1.25rem;border-top:1px solid #e2e8f0">
+                    <button class="btn btn-outline" onclick="closeGenJobFormModal()" style="padding:0.5rem 1rem;border-radius:6px;cursor:pointer;background:white;border:1px solid #e2e8f0">Cancel</button>
+                    <button class="btn btn-primary" onclick="submitGenJob()" style="background:#f59e0b;border-color:#f59e0b;padding:0.5rem 1rem;border-radius:6px;cursor:pointer;color:white;font-weight:600;border:none">
+                        🏭 Raise Job
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Remove existing modal if present
+    const existingModal = document.getElementById('genJobFormModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Add modal to body
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+    
+    // Setup photo preview
+    const photosInput = document.getElementById('genJobPhotos');
+    if (photosInput) {
+        photosInput.onchange = function(e) {
+            const preview = document.getElementById('genJobPhotoPreview');
+            preview.innerHTML = '';
+            const files = Array.from(e.target.files).slice(0,5);
+            for (let i = 0; i < files.length; i++) {
+                const reader = new FileReader();
+                reader.onload = function(ev) {
+                    preview.innerHTML += '<img src="' + ev.target.result + '" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0">';
+                };
+                reader.readAsDataURL(files[i]);
+            }
+        };
+    }
+    
+    // Set default date to tomorrow
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const expectedDateEl = document.getElementById('genJobExpectedDate');
+    if (expectedDateEl) {
+        expectedDateEl.value = tomorrow.toISOString().slice(0,10);
+    }
+}
+
+// Close the modal
+function closeGenJobFormModal() {
+    const modal = document.getElementById('genJobFormModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+// Submit the job
+async function submitGenJob() {
+    const title = document.getElementById('genJobTitle')?.value.trim();
+    if (!title) {
+        showToast('Job title is required', 'error');
+        return;
+    }
+    
+    const btn = document.querySelector('#genJobFormModal .btn-primary');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = 'Saving...';
+    }
+    
+    try {
+        // Upload photos if any
+        let photoUrls = [];
+        const photosInput = document.getElementById('genJobPhotos');
+        if (photosInput && photosInput.files.length) {
+            const formData = new FormData();
+            const files = Array.from(photosInput.files).slice(0,5);
+            for (let i = 0; i < files.length; i++) {
+                formData.append('photos', files[i]);
+            }
+            const token = getToken();
+            const res = await fetch(API_BASE.replace('/api','') + '/api/upload', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + token },
+                body: formData
+            });
+            const uploadData = await res.json();
+            photoUrls = uploadData.files || [];
+        }
+        
+        const body = {
+            title: title,
+            description: document.getElementById('genJobDesc')?.value.trim() || null,
+            expected_completion_date: document.getElementById('genJobExpectedDate')?.value || null,
+            remarks: document.getElementById('genJobRemarks')?.value.trim() || null,
+            photos: photoUrls,
+            plant: user.selectedPlant || user.plant || '100TPD'
+        };
+        
+        await api('/general-shift-jobs', { method: 'POST', body: JSON.stringify(body) });
+        showToast('✅ General Shift Job raised successfully');
+        closeGenJobFormModal();
+        await loadGenJobs();
+        
+        // Switch to gen jobs tab
+        const genTabBtn = document.querySelector('.tab-btn[onclick*="genjobs"]');
+        if (genTabBtn) switchTab('genjobs', genTabBtn);
+        
+    } catch(e) {
+        showToast(e.message, 'error');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '🏭 Raise Job';
+        }
+    }
+}
+
+// ══════════════════════════════════════════════════════════════
+// TAB SWITCHING (MOVED OUTSIDE INIT)
+// ══════════════════════════════════════════════════════════════
+function switchTab(tab, btn) {
+  document.querySelectorAll('.tab-btn').forEach(function(b) {
+    b.classList.remove('active');
+  });
+  document.querySelectorAll('.tab-content').forEach(function(t) {
+    t.classList.remove('active');
+  });
+  btn.classList.add('active');
+  document.getElementById('tab-' + tab).classList.add('active');
+  if (tab === 'jobs') loadJobs();
+  if (tab === 'genjobs') loadGenJobs();
+}
+
+// ══════════════════════════════════════════════════════════════
+// INIT FUNCTION
+// ══════════════════════════════════════════════════════════════
+async function init() {
+  user = requireAuth(['maintenance', 'management', 'admin']);
+  if (!user) return;
+  document.getElementById('headerUser').innerHTML = '<strong>' + user.full_name + '</strong> ' + getRoleLabel(user.role);
+
+  const shiftEl = document.getElementById('infoShift');
+  const plantEl = document.getElementById('infoPlant');
+  const deptEl = document.getElementById('infoDept');
+  const deptWrap = document.getElementById('infoDeptWrap');
+  const dateEl = document.getElementById('infoDate');
+
+  if (shiftEl) shiftEl.textContent = user.selectedShift ? ('Shift ' + user.selectedShift) : user.shift ? ('Shift ' + user.shift) : 'All Shifts';
+  if (plantEl) plantEl.textContent = user.selectedPlant || user.plant || 'All Plants';
+  if (deptEl && user.department) {
+    deptEl.textContent = user.department;
+    if (deptWrap) deptWrap.style.display = 'inline';
+  }
+  if (dateEl) {
+    const now = new Date();
+    dateEl.textContent = now.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+  }
+
+  await loadAll();
+  await loadJobs();
+  await loadDepartments();
+  await loadMonitoringSummary();
+
+  // Initialize General Shift Jobs tab visibility
+  updateGenJobsTabVisibility();
+
+  // Auto-refresh every 60s
+  setInterval(function() {
+    loadAll();
+    loadJobs();
+    updateGenJobsTabVisibility();
+    if (canAccessGenJobs() && document.getElementById('tab-genjobs') && document.getElementById('tab-genjobs').classList.contains('active')) {
+      loadGenJobs();
+    }
+  }, 60000);
+}
+
+// ══════════════════════════════════════════════════════════════
+// BREAKDOWNS TAB — all existing logic unchanged
+// ══════════════════════════════════════════════════════════════
+// ── PARAMETER SUMMARY ────────────────────────────────────────
+let monitoringLogs24hr = [];
+
+
+async function loadMonitoringSummary() {
+  try {
+    const plant = user.selectedPlant || user.plant || '';
+    const qs    = plant ? '?plant=' + plant : '';
+    
+    // Fetch from BOTH APIs
+    const [eqData, shiftData] = await Promise.all([
+      api('/eq-monitoring/logs/24hr' + qs),
+      api('/shift-monitoring/logs/24hr' + qs)
+    ]);
+    
+    const eqLogs = eqData.data || [];
+    const shiftLogs = shiftData.data || [];
+    
+    // Combine both sources
+    const allLogs = [...eqLogs, ...shiftLogs];
+    
+    console.log('Combined logs:', allLogs.length);
+    console.log('From eq-monitoring:', eqLogs.length);
+    console.log('From shift-monitoring:', shiftLogs.length);
+    console.log('Departments found:', [...new Set(allLogs.map(l => l.department))]);
+
+    if (!allLogs.length) {
+      document.getElementById('monitoringSummaryCard').style.display = 'none';
+      return;
+    }
+
+    // Store globally for modal access
+    monitoringLogs24hr = allLogs;
+
+    document.getElementById('monitoringSummaryCard').style.display = 'block';
+    document.getElementById('msBadge').textContent = allLogs.length + ' entries';
+
+    // Group by shift AND department
+    const grouped = {};
+    allLogs.forEach(log => {
+      const dept = log.department || 'Unknown';
+      const key = 'Shift ' + log.shift + '|' + dept;
+      if (!grouped[key]) {
+        grouped[key] = {
+          shift: 'Shift ' + log.shift,
+          department: dept,
+          logs: []
+        };
+      }
+      grouped[key].logs.push(log);
+    });
+
+    let html = '';
+    Object.values(grouped).forEach(group => {
+      // Get unique operators
+      const operators = [...new Set(group.logs.map(l => l.logged_by_name))].join(', ');
+      const eqCount   = [...new Set(group.logs.map(l => l.equipment_name))].length;
+      
+      // Department icon and color
+      let deptColor = '#64748b';
+      let deptIcon = '🏭';
+      if (group.department === 'Process') {
+        deptColor = '#0369a1';
+        deptIcon = '🔥';
+      } else if (group.department === 'Electrical') {
+        deptColor = '#dc2626';
+        deptIcon = '⚡';
+      } else if (group.department === 'Mechanical') {
+        deptColor = '#16a34a';
+        deptIcon = '🔧';
+      }
+
+      html += `
+        <div class="ps-shift-row" onclick="openMonitoringDetailModal('${group.shift}', '${group.department}')" style="cursor:pointer">
+          <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;width:100%">
+            <span class="ps-shift-label">${group.shift}</span>
+            <span style="background:${deptColor}20;color:${deptColor};padding:.2rem .6rem;border-radius:20px;font-size:.75rem;font-weight:600">
+              ${deptIcon} ${group.department}
+            </span>
+            <span style="color:#374151;font-weight:500">${eqCount} equipment</span>
+            <span style="color:#64748b">·</span>
+            <span style="color:#475569">${group.logs.length} logs</span>
+            <span style="color:#64748b">·</span>
+            <span style="color:#64748b;font-size:.8rem">👤 ${operators}</span>
+            <span style="margin-left:auto;color:#0369a1;font-size:.75rem;font-weight:500">View →</span>
+          </div>
+        </div>`;
+    });
+    document.getElementById('msSummaryList').innerHTML = html;
+    
+  } catch(e) {
+    console.warn('loadMonitoringSummary failed:', e.message);
+    document.getElementById('monitoringSummaryCard').style.display = 'none';
+  }
+}
+
+function openMonitoringDetailModal(shiftFilter, departmentFilter = null) {
+  document.getElementById('monitoringDetailModal').classList.add('open');
+  const body = document.getElementById('monitoringDetailBody');
+  body.innerHTML = '<div class="loading">Loading...</div>';
+
+  // Get logs from the global variable
+  let logs = monitoringLogs24hr;
+  
+  // Apply shift filter if provided
+  if (shiftFilter) {
+    logs = logs.filter(l => ('Shift ' + l.shift) === shiftFilter);
+  }
+  
+  // Apply department filter if provided
+  if (departmentFilter) {
+    logs = logs.filter(l => l.department === departmentFilter);
+  }
+
+  if (!logs.length) {
+    body.innerHTML = '<p style="color:#94a3b8;text-align:center;padding:2rem">No monitoring logs found.</p>';
+    return;
+  }
+
+  // Group by equipment
+  const byEq = {};
+  logs.forEach(log => {
+    const key = log.equipment_name + '|' + (log.equipment_code || '');
+    if (!byEq[key]) byEq[key] = [];
+    byEq[key].push(log);
+  });
+
+  // Department header color
+  const deptName = departmentFilter || 'All Departments';
+  let deptHeaderColor = '#64748b';
+  let deptHeaderIcon = '📊';
+  if (deptName === 'Process') {
+    deptHeaderColor = '#0369a1';
+    deptHeaderIcon = '🔥';
+  } else if (deptName === 'Electrical') {
+    deptHeaderColor = '#dc2626';
+    deptHeaderIcon = '⚡';
+  } else if (deptName === 'Mechanical') {
+    deptHeaderColor = '#16a34a';
+    deptHeaderIcon = '🔧';
+  }
+
+  let html = `<div style="margin-bottom:1rem;padding:.5rem .75rem;background:${deptHeaderColor}10;border-left:3px solid ${deptHeaderColor};border-radius:6px">
+    <strong style="color:${deptHeaderColor}">${deptHeaderIcon} ${deptName} Department Monitoring Logs</strong>
+    <span style="font-size:.75rem;color:#64748b;margin-left:.5rem">Last 24 hours</span>
+  </div>`;
+
+  Object.entries(byEq).forEach(([eqKey, eqLogs]) => {
+    const eqName = eqKey.split('|')[0];
+    const eqCode = eqKey.split('|')[1];
+
+   // ADD THIS DEBUG CODE RIGHT HERE
+    console.log('=== Processing Equipment ===');
+    console.log('Equipment Name:', eqName);
+    console.log('Equipment Code:', eqCode);
+    console.log('Number of logs:', eqLogs.length);
+    console.log('First log sample:', eqLogs[0]);
+
+    // Check if this is Kiln equipment (has zone-based readings)
+     const isKiln = eqCode === 'SG-01' || eqCode === 'SG-01-225' ||
+               eqName.toLowerCase().includes('kiln') || 
+               eqName.toLowerCase().includes('segment wise') ||
+               (eqCode && eqCode.toLowerCase().includes('sg-01'));
+
+   
+   // ADD THIS DEBUG LINE RIGHT HERE
+console.log('Equipment:', eqName, 'Code:', eqCode, 'isKiln:', isKiln);
+    
+    // Sort logs by timestamp (OLDEST first for better trend viewing in zone table)
+const sortedLogs = [...eqLogs].sort((a, b) => new Date(a.logged_at) - new Date(b.logged_at));
+    
+    html += `<div style="margin-bottom:1.5rem;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+      <div style="font-weight:700;font-size:.85rem;color:#1e40af;padding:.5rem .75rem;background:#f8fafc;border-bottom:1px solid #e2e8f0">
+        🏭 ${eqName} ${eqCode ? '(' + eqCode + ')' : ''}
+      </div>`;
+    
+    if (isKiln) {
+    console.log('Calling renderZoneTable for:', eqCode, 'with logs:', eqLogs.length);
+      // ZONE TABLE DISPLAY FOR KILN EQUIPMENT
+      html += renderZoneTable(sortedLogs, deptHeaderColor, eqCode);
+    } else {
+      // CARD DISPLAY FOR REGULAR EQUIPMENT
+      html += renderRegularCards(sortedLogs, deptHeaderColor);
+    }
+    
+    html += `</div>`;
+  });
+  body.innerHTML = html;
+}
+
+// Helper function to render zone-based table (for Kiln) - EXACT MATCH TO OPERATOR PANEL
+function renderZoneTable(logs, deptHeaderColor, eqCode = '') {
+  
+ // ========== 🔍 ADD DEBUG CODE HERE - RIGHT AT THE START ==========
+  console.log('=== renderZoneTable DEBUG ===');
+  console.log('eqCode:', eqCode);
+  console.log('Number of logs:', logs.length);
+  console.log('First log:', logs[0]);
+  
+  if (logs[0] && logs[0].readings) {
+    let sampleReadings = logs[0].readings;
+    if (typeof sampleReadings === 'string') {
+      sampleReadings = JSON.parse(sampleReadings);
+      console.log('Parsed readings (first log):', sampleReadings);
+    } else {
+      console.log('Readings (first log):', sampleReadings);
+    }
+  }
+
+// Step 1: Dynamically detect all zones from the data
+  const allZones = new Set();
+  
+  logs.forEach(log => {
+    let readings = log.readings;
+    if (typeof readings === 'string') {
+      try { readings = JSON.parse(readings); } catch(e) { readings = []; }
+    }
+    
+    if (readings && readings.length) {
+      readings.forEach(r => {
+        // Get parameter name from various possible fields
+        const zoneName = r.parameter_name || r.label || r.name || r.zone;
+        if (zoneName) {
+          // Accept T1, T2, T3... or Zone1, Zone2, etc.
+          if (zoneName.match(/^T\d+$/i) || zoneName.match(/^Zone\s*\d+$/i)) {
+            allZones.add(zoneName);
+          }
+        }
+      });
+    }
+  });
+
+  // ========== 🔍 ADD SECOND DEBUG CODE HERE ==========
+  console.log('Detected zones:', Array.from(allZones));
+  // ========== END DEBUG CODE ==========
+
+  // Step 2: Sort zones naturally (T1, T2, T3... T9, T10)
+  let zones = Array.from(allZones).sort((a, b) => {
+    const numA = parseInt(a.match(/\d+/)?.[0]) || 0;
+    const numB = parseInt(b.match(/\d+/)?.[0]) || 0;
+    return numA - numB;
+  });
+  
+  // Step 3: Fallback if no zones detected (based on equipment code)
+  if (zones.length === 0) {
+    console.log('No zones detected from data, using fallback for:', eqCode);
+    if (eqCode === 'SG-01-225') {
+      zones = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9'];
+    } else {
+      // Default for SG-01 and any other Kiln
+      zones = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+    }
+  }
+  
+  console.log(`Rendering zone table for ${eqCode}, zones:`, zones);
+  
+  // Step 4: Build the table header (Shifts as columns)
+  let headerCols = `<th style="padding:.6rem .5rem;text-align:center;background:#1e40af;color:white;font-weight:700;min-width:90px;position:sticky;left:0;z-index:2">
+    ZONE
+  </th>`;
+  
+  logs.forEach((log, idx) => {
+    const logTime = new Date(log.logged_at);
+    const dateStr = logTime.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
+    const timeStr = logTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    
+    headerCols += `<th style="padding:.6rem .3rem;text-align:center;background:#1e40af;color:white;font-weight:700;min-width:110px;border-left:1px solid #3b5998">
+      <div style="font-size:.85rem">SHIFT ${log.shift || '—'}</div>
+      <div style="font-size:.7rem;opacity:0.85">${dateStr}</div>
+      <div style="font-size:.7rem;opacity:0.85">${timeStr}</div>
+      <div style="font-size:.65rem;margin-top:4px;opacity:0.75">👤 ${(log.logged_by_name || '—').substring(0, 12)}</div>
+    </th>`;
+  });
+  
+  // Step 5: Build the table HTML
+  let tableHtml = `
+    <div style="overflow-x:auto;margin:.5rem 0;border-radius:8px;border:1px solid #e2e8f0">
+      <table style="width:100%;border-collapse:collapse;font-size:.8rem;min-width:600px">
+        <thead>
+          <tr>${headerCols}</tr>
+        </thead>
+        <tbody>
+  `;
+  
+// Step 6: Create rows for each zone
+zones.forEach(zone => {
+
+  let row = `<td style="padding:.5rem .5rem;font-weight:700;color:#1e40af;background:#f8fafc;border-bottom:1px solid #e2e8f0;text-align:center;position:sticky;left:0;background:#f8fafc">
+    ${zone}
+  </td>`;
+
+  logs.forEach(log => {
+
+    let readings = log.readings;
+
+    if (typeof readings === 'string') {
+      try {
+        readings = JSON.parse(readings);
+      } catch(e) {
+        readings = [];
+      }
+    }
+
+    let zoneValue = '—';
+
+    if (readings && readings.length) {
+
+      const reading = readings.find(r => {
+
+        return String(
+          r.zone_label ||
+          r.zone ||
+          r.label ||
+          ''
+        ).trim().toUpperCase()
+
+        ===
+
+        String(zone)
+        .trim()
+        .toUpperCase();
+
+      });
+
+      if (reading) {
+
+        zoneValue =
+          reading.actual_value !== undefined
+          ? reading.actual_value
+          : reading.value !== undefined
+          ? reading.value
+          : '—';
+
+      } else {
+
+        readings.forEach(r => {
+
+          if (r[zone] !== undefined) {
+            zoneValue = r[zone];
+          }
+
+        });
+
+      }
+
+    }
+
+    row += `
+      <td style="padding:.5rem .3rem;text-align:center;border-left:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;font-weight:600;color:#0369a1">
+        ${zoneValue}
+      </td>
+    `;
+
+  });
+
+  tableHtml += `
+    <tr style="border-bottom:1px solid #e2e8f0">
+      ${row}
+    </tr>
+  `;
+
+});
+  // Step 7: Add remarks row if any exist
+  const hasRemarks = logs.some(log => log.remarks);
+  if (hasRemarks) {
+    let remarksRow = `<td style="padding:.5rem .5rem;font-weight:700;color:#64748b;background:#f8fafc;text-align:center;position:sticky;left:0;background:#f8fafc">
+      REMARKS
+    </td>`;
+    
+    logs.forEach(log => {
+      remarksRow += `<td style="padding:.5rem .3rem;text-align:center;border-left:1px solid #e2e8f0;font-size:.7rem;color:#64748b">
+        ${log.remarks || '—'}
+      </td>`;
+    });
+    
+    tableHtml += `<tr style="background:#faf5ff">${remarksRow}</tr>`;
+  }
+  
+  tableHtml += `
+        </tbody>
+      </table>
+    </div>
+  `;
+  
+  return tableHtml;
+}
+
+// Helper function to render regular card-based display
+function renderRegularCards(logs, deptHeaderColor) {
+  let html = '';
+  
+  logs.forEach(log => {
+    let readings = log.readings;
+    if (typeof readings === 'string') {
+      try { readings = JSON.parse(readings); } catch(e) { readings = []; }
+    }
+    
+    const logTime = new Date(log.logged_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+    const hourLbl = log.hour_number ? ' · Hour ' + log.hour_number : '';
+    
+    html += `
+      <div style="padding:.6rem .75rem;border-bottom:1px solid #f1f5f9">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:.5rem">
+          <div style="font-size:.8rem;color:#64748b">
+            <strong style="color:#0369a1">Shift ${log.shift}${hourLbl}</strong>
+            &nbsp;·&nbsp; ${logTime}
+          </div>
+          <div style="font-size:.75rem;color:#64748b">
+            👤 ${log.logged_by_name || '—'}
+          </div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:1rem;">
+    `;
+    
+    if (readings && readings.length > 0) {
+      readings.forEach(r => {
+        const paramName = r.parameter_name || r.label || r.name || 'Parameter';
+        const value = r.actual_value !== undefined ? r.actual_value : 
+                      r.value !== undefined ? r.value : '—';
+        const unit = r.unit || '';
+        
+        html += `
+          <div style="min-width:120px;background:#f8fafc;padding:.4rem .7rem;border-radius:6px;border-left:3px solid ${deptHeaderColor}">
+            <div style="font-size:.7rem;color:#64748b;margin-bottom:.2rem">${escapeHtml(paramName)}</div>
+            <div style="font-size:.95rem;font-weight:700;color:#1e40af">${value} ${unit}</div>
+          </div>
+        `;
+      });
+    } else {
+      html += `<div style="color:#94a3b8;font-size:.8rem;padding:.25rem 0">No parameter data available</div>`;
+    }
+    
+    if (log.remarks) {
+      html += `<div style="width:100%;margin-top:.5rem;padding-top:.3rem;font-size:.75rem;color:#64748b;border-top:1px dashed #e2e8f0">📝 ${escapeHtml(log.remarks)}</div>`;
+    }
+    
+    html += `</div></div>`;
+  });
+  
+  return html;
+}
+
+function closeMonitoringDetailModal() {
+  document.getElementById('monitoringDetailModal').classList.remove('open');
+}
+
+// ── String escape helpers for use in onclick attributes ──────
+function escJ(s)    { return String(s||'').replace(/&/g,'&amp;').replace(/'/g,'&#39;').replace(/"/g,'&quot;'); }
+function escHtml(s) { return (s||'').replace(/'/g,"\'"); }
+
+async function loadAll() {
+  await Promise.all([loadOpen(), loadClosedToday(), loadKpis()]);
+}
+
+async function loadKpis() {
+  try {
+    const data = await api('/dashboard/summary');
+    const d = data.data;
+    document.getElementById('kpiOpen').textContent        = d.today.open_breakdowns;
+    document.getElementById('kpiClosedToday').textContent = d.today.closed_today;
+    document.getElementById('kpiMttr').textContent        = Math.round(d.today.avg_mttr_min) || '—';
+    const data2 = await api('/breakdowns/open');
+    const bds = data2.data;
+    if (bds.length) {
+      const longest = Math.max(...bds.map(b => b.current_downtime_minutes || 0));
+      document.getElementById('kpiLongest').textContent = (longest / 60).toFixed(1);
+    } else {
+      document.getElementById('kpiLongest').textContent = '0';
+    }
+  } catch(e) {}
+}
+
+async function loadOpen() {
+  try {
+    const plant = user.selectedPlant || user.plant || '';
+    const qs    = plant ? `?plant=${plant}` : '';
+    const data  = await api(`/breakdowns/open${qs}`);
+    openBds = data.data;
+    renderOpen();
+  } catch(e) {
+    document.getElementById('openBdContainer').innerHTML =
+      `<div class="empty-state"><div class="icon">❌</div><p>Failed to load: ${e.message}</p></div>`;
+  }
+}
+
+async function loadClosedToday() {
+  try {
+    const today = new Date().toISOString().slice(0,10);
+    const plant = user.selectedPlant || user.plant || '';
+    const plantQs = plant ? `&plant=${plant}` : '';
+    const data = await api(`/breakdowns?status=CLOSED&from_date=${today}${plantQs}`);
+    closedBds = data.data;
+    renderClosed();
+  } catch(e) {}
+}
+
+function filterDept(btn) {
+  document.querySelectorAll('.dept-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentDept = btn.dataset.dept;
+  renderOpen();
+}
+
+function catBadge(cat) {
+  if (!cat) return '';
+  const map = { Mechanical:'mech', Electrical:'elec', Process:'proc', Utility:'util', Planned:'plan' };
+  return `<span class="badge badge-${map[cat]||'plan'}">${cat}</span>`;
+}
+
+function renderOpen() {
+  const q = (document.getElementById('bdSearch') ? document.getElementById('bdSearch').value : '').toLowerCase().trim();
+  let filtered = currentDept === 'All' ? openBds : openBds.filter(b => b.department === currentDept);
+  if (q) filtered = filtered.filter(b =>
+    (b.equipment_name||'').toLowerCase().includes(q) ||
+    (b.equipment_code||'').toLowerCase().includes(q) ||
+    (b.bd_number||'').toLowerCase().includes(q) ||
+    (b.location||'').toLowerCase().includes(q));
+  if (!filtered.length) {
+    document.getElementById('openBdContainer').innerHTML =
+      '<div class="empty-state"><div class="icon">✅</div><p>No open breakdowns.</p></div>';
+    return;
+  }
+  let html = '<div class="table-wrap"><table><thead><tr><th>BD Number</th><th>Equipment</th><th>Location</th><th>Reason</th><th>Down Since</th><th>Duration</th><th>Action</th></tr></thead><tbody>';
+  filtered.forEach(b => {
+    const mins   = b.current_downtime_minutes || 0;
+    const urgent = mins > 480 ? 'background:#fff5f5' : '';
+    html += `<tr style="${urgent}">
+      <td><strong style="color:var(--primary)">${b.bd_number}</strong></td>
+      <td><strong>${b.equipment_name}</strong><div style="font-size:.75rem;color:#64748b">${b.equipment_code}</div></td>
+      <td style="font-size:.82rem">${b.location || b.department}</td>
+      <td>${catBadge(b.reason_category)}<div style="font-size:.78rem;margin-top:.2rem">${b.initial_reason || '—'}</div></td>
+      <td style="font-size:.82rem">${fmtDateTime(b.start_time)}</td>
+      <td><strong style="color:${mins>120?'var(--danger)':'var(--warning)'}">${fmtDuration(mins)}</strong></td>
+      <td><button class="btn btn-primary btn-sm" onclick="openBdModal(${b.id})">Update / Close</button></td>
+    </tr>`;
+  });
+  html += '</tbody></table></div>';
+  document.getElementById('openBdContainer').innerHTML = html;
+}
+
+function renderClosed() {
+  if (!closedBds.length) {
+    document.getElementById('closedContainer').innerHTML =
+      '<p style="color:#64748b;font-size:.88rem">No breakdowns closed today.</p>';
+    return;
+  }
+  let html = '<div class="table-wrap"><table><thead><tr><th>BD Number</th><th>Equipment</th><th>Downtime</th><th>Closed At</th><th>Closed By</th></tr></thead><tbody>';
+  closedBds.forEach(b => {
+    html += `<tr>
+      <td><strong style="color:var(--success)">${b.bd_number}</strong></td>
+      <td>${b.equipment_name}</td>
+      <td><strong>${fmtDuration(b.downtime_minutes)}</strong></td>
+      <td>${fmtDateTime(b.closed_at)}</td>
+      <td>${b.closed_by_name || '—'}</td>
+    </tr>`;
+  });
+  html += '</tbody></table></div>';
+  document.getElementById('closedContainer').innerHTML = html;
+}
+
+async function openBdModal(bdId) {
+  currentBdId = bdId;
+  try {
+    const data = await api(`/breakdowns/${bdId}`);
+    const b    = data.data;
+    const mins = Math.round((Date.now() - new Date(b.start_time)) / 60000);
+    document.getElementById('modalTitle').textContent  = b.equipment_name;
+    document.getElementById('modalBdNum').textContent  = b.bd_number;
+    document.getElementById('m_equip').textContent     = `${b.equipment_name} (${b.equipment_code})`;
+    document.getElementById('m_loc').textContent       = b.location || b.department;
+    document.getElementById('m_start').textContent     = fmtDateTime(b.start_time);
+    document.getElementById('m_reason').textContent    = b.initial_reason || '—';
+    document.getElementById('m_downtime').textContent  = fmtDuration(mins);
+    document.getElementById('m_findings').value        = b.findings || '';
+    document.getElementById('m_actions').value         = b.actions_taken || '';
+    document.getElementById('m_spares').value          = b.spares_used || '';
+    document.getElementById('m_resolution').value      = b.resolution_notes || '';
+    const existingDiv = document.getElementById('existingPhotos');
+    existingDiv.innerHTML = '';
+    if (b.photos && b.photos.length) {
+      existingDiv.innerHTML = '<div style="font-size:.75rem;color:#64748b;width:100%;margin-bottom:.3rem">Previously attached:</div>';
+      b.photos.forEach(p => {
+        existingDiv.innerHTML += `<a href="${p}" target="_blank"><img src="${p}" style="width:70px;height:70px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0"></a>`;
+      });
+    }
+    document.getElementById('bdPhotos').value = '';
+    document.getElementById('bdPhotoPreview').innerHTML = '';
+    if (dtInterval) clearInterval(dtInterval);
+    dtInterval = setInterval(() => {
+      const m = Math.round((Date.now() - new Date(b.start_time)) / 60000);
+      document.getElementById('m_downtime').textContent = fmtDuration(m);
+    }, 30000);
+    document.getElementById('bdModal').classList.add('open');
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+function closeBdModal() {
+  document.getElementById('bdModal').classList.remove('open');
+  if (dtInterval) clearInterval(dtInterval);
+  currentBdId = null;
+  document.getElementById('bdPhotos').value           = '';
+  document.getElementById('bdPhotoPreview').innerHTML = '';
+  document.getElementById('existingPhotos').innerHTML = '';
+}
+
+function previewBdPhotos(input) {
+  const preview = document.getElementById('bdPhotoPreview');
+  preview.innerHTML = '';
+  Array.from(input.files).slice(0,5).forEach((file,i) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      preview.innerHTML += `<div style="position:relative">
+        <img src="${e.target.result}" style="width:70px;height:70px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0">
+        <span style="position:absolute;top:-5px;right:-5px;background:#ef4444;color:#fff;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:.65rem;cursor:pointer" onclick="removeBdPhoto(${i})">✕</span>
+      </div>`;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function removeBdPhoto(index) {
+  const input = document.getElementById('bdPhotos');
+  const dt    = new DataTransfer();
+  Array.from(input.files).forEach((file,i) => { if (i!==index) dt.items.add(file); });
+  input.files = dt.files;
+  previewBdPhotos(input);
+}
+
+async function uploadBdPhotos() {
+  const input = document.getElementById('bdPhotos');
+  if (!input.files.length) return [];
+  const formData = new FormData();
+  Array.from(input.files).slice(0,5).forEach(f => formData.append('photos',f));
+  try {
+    const token = getToken();
+    const res   = await fetch(`${API_BASE.replace('/api','')}/api/upload`, {
+      method:'POST', headers:{'Authorization':`Bearer ${token}`}, body:formData
+    });
+    const data = await res.json();
+    return data.files || [];
+  } catch(e) { return []; }
+}
+
+async function saveUpdate() {
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = 'Saving...';
+  try {
+    const photos = await uploadBdPhotos();
+    await api(`/breakdowns/${currentBdId}`, {
+      method:'PATCH',
+      body: JSON.stringify({
+        findings:         document.getElementById('m_findings').value,
+        actions_taken:    document.getElementById('m_actions').value,
+        spares_used:      document.getElementById('m_spares').value,
+        resolution_notes: document.getElementById('m_resolution').value,
+        photos
+      })
+    });
+    showToast('Update saved successfully');
+  } catch(e) { showToast(e.message, 'error'); }
+  finally { btn.disabled = false; btn.textContent = '💾 Save Update'; }
+}
+
+async function closeBreakdown() {
+  const resolution = document.getElementById('m_resolution').value.trim();
+  if (!resolution) { showToast('Resolution notes are required to close the breakdown', 'error'); return; }
+  if (!confirm('Close this breakdown? This will mark the equipment as RUNNING and record the downtime.')) return;
+  const btn = event.target;
+  btn.disabled = true; btn.textContent = 'Closing...';
+  try {
+    const photos = await uploadBdPhotos();
+    const result = await api(`/breakdowns/${currentBdId}/close`, {
+      method:'POST',
+      body: JSON.stringify({
+        findings:         document.getElementById('m_findings').value,
+        actions_taken:    document.getElementById('m_actions').value,
+        spares_used:      document.getElementById('m_spares').value,
+        resolution_notes: resolution,
+        photos
+      })
+    });
+    showToast(result.message, 'success');
+    closeBdModal();
+    await loadAll();
+  } catch(e) { showToast(e.message, 'error'); }
+  finally { btn.disabled = false; btn.textContent = '✅ Close Breakdown'; }
+}
+
+// ══════════════════════════════════════════════════════════════
+// JOBS TAB
+// ══════════════════════════════════════════════════════════════
+async function loadJobs() {
+  try {
+    const plant = user.selectedPlant || user.plant || '100TPD';
+    const data  = await api(`/jobs?plant=${plant}`);
+    allJobs     = data.data || [];
+    updateJobsKpi();
+    renderJobs();
+    document.getElementById('jobsLastUpdated').textContent =
+      'Updated ' + new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+  } catch(e) { showToast('Jobs load failed: ' + e.message, 'error'); }
+}
+
+function updateJobsKpi() {
+  const today = new Date().toISOString().slice(0,10);
+  const c = { OPEN:0, ASSIGNED:0, 'IN PROGRESS':0, COMPLETED:0, CLOSED_TODAY:0, REASSIGNED:0 };
+  allJobs.forEach(j => {
+    if (j.status === 'OPEN')        c.OPEN++;
+    if (j.status === 'ASSIGNED')    c.ASSIGNED++;
+    if (j.status === 'IN PROGRESS') c['IN PROGRESS']++;
+    if (j.status === 'COMPLETED')   c.COMPLETED++;
+    if (j.status === 'REASSIGNED')  c.REASSIGNED++;
+    if (j.status === 'CLOSED' && j.closed_at?.slice(0,10) === today) c.CLOSED_TODAY++;
+  });
+  { const _e = document.getElementById('jkOpen'); if (_e) _e.textContent = c.OPEN; }
+  { const _e = document.getElementById('jkAssigned'); if (_e) _e.textContent = c.ASSIGNED; }
+  { const _e = document.getElementById('jkProgress'); if (_e) _e.textContent = c['IN PROGRESS']; }
+  { const _e = document.getElementById('jkCompleted'); if (_e) _e.textContent = c.COMPLETED; }
+  { const _e = document.getElementById('jkClosed'); if (_e) _e.textContent = c.CLOSED_TODAY; }
+
+  // Red badge on tab if open jobs > 0
+  const badge = document.getElementById('jobsBadge');
+  if (c.OPEN > 0) {
+    badge.textContent = c.OPEN;
+    badge.style.display = 'inline';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function filterJobs(btn) {
+  document.querySelectorAll('.jfilter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentJobFilter = btn.dataset.status;
+  renderJobs();
+}
+
+function renderDeptCell(j) {
+  if (j.is_multi_assign && j.assignments && j.assignments.length) {
+    let html = '<div style="font-size:.78rem">';
+    j.assignments.forEach(function(a) {
+      const bg    = a.status==='COMPLETED' ? '#dcfce7' : a.status==='IN PROGRESS' ? '#dbeafe' : '#f1f5f9';
+      const color = a.status==='COMPLETED' ? '#166534' : a.status==='IN PROGRESS' ? '#1e40af' : '#475569';
+      const tick  = a.status === 'COMPLETED' ? ' ✓' : '';
+      html += '<div style="display:flex;align-items:center;gap:.4rem;margin-bottom:.25rem;padding:.15rem 0;border-bottom:1px solid #f1f5f9">'
+            + '<span style="color:#1e40af;font-weight:600;min-width:90px">' + a.department + '</span>'
+            + '<span style="font-size:.7rem;padding:.1rem .35rem;border-radius:4px;font-weight:600;background:' + bg + ';color:' + color + '">' + a.status + tick + '</span>'
+            + '</div>';
+    });
+    html += '</div>';
+    return html;
+  }
+  if (j.assigned_dept) return '<span style="color:#1e40af;font-weight:600">' + j.assigned_dept + '</span>';
+  return '<span style="color:#ef4444;font-size:.75rem">Unassigned</span>';
+}
+
+function renderJobs() {
+  const isReadOnly   = user.role === 'management';
+  const filtered     = currentJobFilter === 'ALL'
+    ? allJobs : allJobs.filter(j => j.status === currentJobFilter);
+
+  if (!filtered.length) {
+    document.getElementById('jobsTableBody').innerHTML =
+      '<div style="text-align:center;padding:2.5rem;color:#94a3b8"><div style="font-size:1.8rem">📋</div><p>No jobs found</p></div>';
+    return;
+  }
+
+  let html = '';
+  filtered.forEach(j => {
+    const sk  = j.status.replace(/ /g,'-');
+    const dt  = new Date(j.created_at).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+    const statusBadge = `<span class="jstatus js-${sk}">${j.status}</span>`;
+
+    // Source indicator
+    const fromStop = j.description
+      ? `<span style="font-size:.7rem;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:8px;margin-left:4px;">⚡ Stoppage</span>` : '';
+
+    // Actions — role based
+    let actions = '<span style="color:#94a3b8;font-size:.8rem">—</span>';
+
+    // Count assigned departments for multi-assign jobs
+    const deptCount = (j.is_multi_assign && j.assignments) ? j.assignments.length : 1;
+    const canReassign = deptCount <= 2 && j.status === 'ASSIGNED';
+
+    if (!isReadOnly) {
+      if (j.status === 'OPEN') {
+        actions = '<span style="color:#94a3b8;font-size:.75rem">Pending assignment</span>';
+      } else if (j.status === 'ASSIGNED') {
+        actions = canReassign ?
+          `<button style="padding:.3rem .6rem;font-size:.75rem;background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;border-radius:6px;cursor:pointer"
+            onclick="openReassignModal(${j.id},'${escJ(j.title)}','${j.job_number||''}','${j.assigned_dept||''}')"
+            title="Reassign to another department">
+            🔀 Reassign</button>`
+          : '<span style="color:#94a3b8;font-size:.75rem">—</span>';
+      } else if (j.status === 'IN PROGRESS') {
+        actions = '<span style="color:#94a3b8;font-size:.75rem">—</span>';
+      } else if (j.status === 'COMPLETED') {
+        actions = '<span style="color:#166534;font-size:.75rem;font-weight:600">✓ Awaiting closure by SIC</span>';
+      } else if (j.status === 'REASSIGNED') {
+        actions = deptCount <= 2 ?
+          `<button style="padding:.3rem .6rem;font-size:.75rem;background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;border-radius:6px;cursor:pointer"
+            onclick="openReassignModal(${j.id},'${escJ(j.title)}','${j.job_number||''}','${j.assigned_dept||''}')"
+            title="Reassign to another department">
+            🔀 Reassign</button>`
+          : '<span style="color:#94a3b8;font-size:.75rem">—</span>';
+      }
+    }
+
+    html += `<div class="job-row ${j.status==='OPEN'?'priority-high':j.status==='ASSIGNED'?'priority-medium':''}">
+      <div>
+        <span style="font-family:monospace;font-size:.78rem;color:#1e40af;font-weight:700;cursor:pointer;text-decoration:underline;text-underline-offset:2px;" onclick="openJobDetail(${j.id})" title="View details & photos">${j.job_number||'—'}</span>
+        ${j.photos && j.photos.length ? `<br><span style="font-size:.7rem;color:#0369a1;cursor:pointer" onclick="openJobDetail(${j.id})">📷 ${j.photos.length} photo${j.photos.length>1?'s':''}</span>` : ''}
+      </div>
+      <div>
+        <div style="font-weight:600;font-size:.85rem">${j.title}${fromStop}</div>
+        <div style="font-size:.75rem;color:#64748b;margin-top:2px">
+          ${j.equipment_code ? `🔧 ${j.equipment_code}` : ''} ${j.equipment_name||''}
+        </div>
+        <div style="font-size:.72rem;color:#94a3b8;margin-top:1px">📅 ${dt}</div>
+      </div>
+      <div style="font-size:.82rem">${j.raised_by_name||'—'}<br>
+        <span style="font-size:.72rem;color:#94a3b8">${j.raised_by_dept||''}</span>
+      </div>
+      <div style="font-size:.8rem">${j.plant||''}<br>
+        <span style="color:#64748b">Shift ${j.shift||'—'}</span>
+      </div>
+      <div>${statusBadge}</div>
+      <div style="font-size:.82rem">
+        ${renderDeptCell(j)}
+        ${j.assigned_to_name ? `<br><span style="font-size:.72rem;color:#64748b">${j.assigned_to_name}</span>` : ''}
+      </div>
+      <div>${actions}</div>
+    </div>`;
+  });
+
+  document.getElementById('jobsTableBody').innerHTML = html;
+}
+
+// ── Departments — load once, populate both places ─────────────
+async function loadDepartments() {
+  try {
+    const data = await api('/masters/departments');
+    // Deduplicate by name
+    allDepartments = [...new Map((data.data||[]).map(d => [d.name, d])).values()]
+                    .filter(d => d.is_active !== false);
+
+    // 1. Breakdown filter tabs — insert after "All" button
+    const bar = document.getElementById('deptFilterBar');
+    bar.querySelectorAll('.dept-btn:not([data-dept="All"])').forEach(b => b.remove());
+    allDepartments.forEach(d => {
+      const btn = document.createElement('button');
+      btn.className    = 'dept-btn';
+      btn.dataset.dept = d.name;
+      btn.textContent  = d.name;
+      btn.onclick      = function() { filterDept(this); };
+      bar.appendChild(btn);
+    });
+
+    // 2. Reassign modal dropdown — populate if it exists
+    const rSel = document.getElementById('rNewDept');
+    if (rSel) {
+      rSel.innerHTML = '<option value="">— Select Department —</option>';
+      allDepartments.forEach(d => {
+        rSel.innerHTML += `<option value="${d.name}">${d.name}</option>`;
+      });
+    }
+  } catch(e) {
+    console.error('loadDepartments failed:', e);
+  }
+}
+
+
+function openAssignModal(jobId, title, jobNumber, equipName) {
+  document.getElementById('aJobId').value           = jobId;
+  document.getElementById('aJobTitle').textContent  = title;
+  document.getElementById('aJobNumber').textContent = jobNumber;
+  document.getElementById('aJobEquip').textContent  = equipName ? `🔧 ${equipName}` : '';
+  document.getElementById('aRemarks').value         = '';
+  document.getElementById('aMultiNote').style.display = 'none';
+
+  // Populate checkboxes from loaded departments
+  const container = document.getElementById('aDeptCheckboxes');
+  if (allDepartments && allDepartments.length) {
+    container.innerHTML = allDepartments.map(d => `
+      <label style="display:flex;align-items:center;gap:.5rem;padding:.3rem .2rem;cursor:pointer;font-size:.88rem">
+        <input type="checkbox" value="${d.name}" class="aDeptCheck"
+          style="width:16px;height:16px;cursor:pointer"
+          onchange="updateMultiNote()">
+        ${d.name}
+      </label>`).join('');
+  } else {
+    container.innerHTML = '<div style="color:#94a3b8;font-size:.85rem">No departments found</div>';
+  }
+  document.getElementById('assignModal').classList.add('open');
+}
+
+function updateMultiNote() {
+  const checked = document.querySelectorAll('.aDeptCheck:checked').length;
+  document.getElementById('aMultiNote').style.display = checked > 1 ? 'block' : 'none';
+}
+
+function closeAssignModal() {
+  document.getElementById('assignModal').classList.remove('open');
+}
+
+async function confirmAssign() {
+  const jobId   = document.getElementById('aJobId').value;
+  const checked = [...document.querySelectorAll('.aDeptCheck:checked')].map(c => c.value);
+  const remarks = document.getElementById('aRemarks').value.trim();
+
+  if (!checked.length) { showToast('Please select at least one department', 'error'); return; }
+
+  const btn = document.querySelector('#assignModal .btn-primary');
+  btn.disabled = true; btn.textContent = 'Assigning...';
+  try {
+    await api(`/jobs/${jobId}/assign`, {
+      method:'PATCH',
+      body: JSON.stringify({
+        departments: checked,
+        assigned_dept: checked[0],
+        remarks: remarks||null
+      })
+    });
+    const msg = checked.length > 1
+      ? `✅ Job assigned to ${checked.length} departments: ${checked.join(', ')}`
+      : `✅ Job assigned to ${checked[0]}`;
+    showToast(msg);
+    closeAssignModal();
+    await loadJobs();
+  } catch(e) { showToast(e.message, 'error'); }
+  finally { btn.disabled = false; btn.textContent = 'Assign →'; }
+}
+
+// ── Status Modal ──────────────────────────────────────────────
+function openJobStatusModal(jobId, title, jobNumber, currentStatus) {
+  document.getElementById('sJobId').value           = jobId;
+  document.getElementById('sJobTitle').textContent  = title;
+  document.getElementById('sJobNumber').textContent = jobNumber;
+  document.getElementById('sRemarks').value         = '';
+
+  // Show only valid next statuses based on current status
+  const sel = document.getElementById('sStatus');
+  sel.innerHTML = '<option value="">— Select —</option>';
+  const nextStatuses = (currentStatus === 'ASSIGNED' || currentStatus === 'REASSIGNED')
+    ? [['IN PROGRESS', 'IN PROGRESS']]
+    : [['IN PROGRESS', 'IN PROGRESS'], ['COMPLETED', 'COMPLETED'], ['CLOSED', 'CLOSED']];
+  nextStatuses.forEach(([val, label]) => {
+    sel.innerHTML += `<option value="${val}">${label}</option>`;
+  });
+
+  document.getElementById('jobStatusModal').classList.add('open');
+}
+function closeJobStatusModal() {
+  document.getElementById('jobStatusModal').classList.remove('open');
+}
+
+// ── REASSIGN JOB ─────────────────────────────────────────────
+async function openReassignModal(jobId, title, jobNumber, currentDept) {
+  document.getElementById('rJobId').value          = jobId;
+  document.getElementById('rJobTitle').textContent = title;
+  document.getElementById('rJobNumber').textContent= jobNumber;
+  document.getElementById('rFromDept').value       = currentDept || '—';
+  document.getElementById('rRemarks').value        = '';
+
+  // Load departments into dropdown (excluding current)
+  const sel = document.getElementById('rToDept');
+  sel.innerHTML = '<option value="">— Select Department —</option>';
+  try {
+    const data = await api('/masters/departments');
+    (data.data || []).forEach(d => {
+      if (d.name !== currentDept) {
+        const opt = document.createElement('option');
+        opt.value = d.name; opt.textContent = d.name;
+        sel.appendChild(opt);
+      }
+    });
+  } catch(e) { console.warn('Could not load departments:', e); }
+
+  document.getElementById('reassignModal').classList.add('open');
+}
+
+// ── Dept Status Modal (Multi-assign) ─────────────────────────
+function openDeptStatusModal(jobId, title, jobNumber, dept, currentStatus) {
+  document.getElementById('dsJobId').value            = jobId;
+  document.getElementById('dsDept').value             = dept;
+  document.getElementById('dsJobTitle').textContent   = title;
+  document.getElementById('dsJobNumber').textContent  = jobNumber;
+  document.getElementById('dsDeptLabel').textContent  = dept;
+  document.getElementById('dsRemarks').value          = '';
+
+  // Only show valid next statuses
+  const sel = document.getElementById('dsStatus');
+  sel.innerHTML = '<option value="">— Select —</option>';
+  if (currentStatus === 'ASSIGNED') {
+    sel.innerHTML += '<option value="IN PROGRESS">IN PROGRESS</option>';
+  } else {
+    sel.innerHTML += '<option value="IN PROGRESS">IN PROGRESS</option>';
+    sel.innerHTML += '<option value="COMPLETED">COMPLETED</option>';
+  }
+  document.getElementById('deptStatusModal').classList.add('open');
+}
+function closeDeptStatusModal() {
+  document.getElementById('deptStatusModal').classList.remove('open');
+}
+async function confirmDeptStatus() {
+  const jobId   = document.getElementById('dsJobId').value;
+  const dept    = document.getElementById('dsDept').value;
+  const status  = document.getElementById('dsStatus').value;
+  const remarks = document.getElementById('dsRemarks').value.trim();
+
+  if (!status) { showToast('Please select a status', 'error'); return; }
+
+  const btn = document.querySelector('#deptStatusModal .btn-primary');
+  btn.disabled = true; btn.textContent = 'Updating...';
+  try {
+    const res = await api(`/jobs/${jobId}/dept-status`, {
+      method:'PATCH',
+      body: JSON.stringify({ department:dept, status, remarks:remarks||null })
+    });
+    showToast(res.all_completed
+      ? '✅ All departments done — Job marked COMPLETED!'
+      : `✅ ${dept} updated to ${status}`);
+    closeDeptStatusModal();
+    await loadJobs();
+  } catch(e) { showToast(e.message, 'error'); }
+  finally { btn.disabled = false; btn.textContent = '✅ Update'; }
+}
+
+function closeReassignModal() {
+  document.getElementById('reassignModal').classList.remove('open');
+}
+
+async function confirmReassign() {
+  const jobId   = document.getElementById('rJobId').value;
+  const toDept  = document.getElementById('rToDept').value;
+  const remarks = document.getElementById('rRemarks').value.trim();
+
+  if (!toDept)   { showToast('Please select a department', 'error'); return; }
+  if (!remarks)  { showToast('Handover remarks are required', 'error'); return; }
+
+  const btn = document.querySelector('#reassignModal .btn-primary');
+  btn.disabled = true; btn.textContent = 'Reassigning...';
+  try {
+    await api(`/jobs/${jobId}/reassign`, {
+      method: 'PATCH',
+      body: JSON.stringify({ to_dept: toDept, remarks })
+    });
+    showToast(`✅ Job reassigned to ${toDept}`);
+    closeReassignModal();
+    loadJobs();
+  } catch(e) {
+    showToast(e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '🔀 Reassign Job';
+  }
+}
+
+// ── JOB HISTORY TRAIL ────────────────────────────────────────
+async function openHistoryModal(jobId, title) {
+  document.getElementById('hJobTitle').textContent = title;
+  document.getElementById('historyTrail').innerHTML = '<div class="loading">Loading trail...</div>';
+  document.getElementById('historyModal').classList.add('open');
+
+  try {
+    const data   = await api(`/jobs/${jobId}/history`);
+    const trail  = data.data || [];
+
+    if (!trail.length) {
+      document.getElementById('historyTrail').innerHTML =
+        '<p style="color:#94a3b8;text-align:center;padding:1rem">No history recorded yet.</p>';
+      return;
+    }
+
+    const actionColour = {
+      'OPEN':        { bg:'#fee2e2', color:'#991b1b', icon:'🔴' },
+      'ASSIGNED':    { bg:'#fef9c3', color:'#854d0e', icon:'🟡' },
+      'IN PROGRESS': { bg:'#dbeafe', color:'#1e40af', icon:'🔵' },
+      'COMPLETED':   { bg:'#dcfce7', color:'#166534', icon:'🟢' },
+      'CLOSED':      { bg:'#f1f5f9', color:'#475569', icon:'⚫' },
+      'REASSIGNED':  { bg:'#fff7ed', color:'#c2410c', icon:'🔀' },
+    };
+
+    let html = '<div style="position:relative;padding-left:1.5rem">';
+    // Vertical timeline line
+    html += '<div style="position:absolute;left:.55rem;top:0;bottom:0;width:2px;background:#e2e8f0"></div>';
+
+    trail.forEach((h, i) => {
+      const ac    = actionColour[h.action] || { bg:'#f1f5f9', color:'#475569', icon:'📌' };
+      const time  = new Date(h.created_at).toLocaleString('en-GB', {
+                      day:'2-digit', month:'short', year:'numeric',
+                      hour:'2-digit', minute:'2-digit' });
+      const arrow = h.from_dept && h.to_dept && h.from_dept !== h.to_dept
+                    ? `<span style="color:#64748b;font-size:.8rem"> ${h.from_dept} → ${h.to_dept}</span>`
+                    : h.from_dept ? `<span style="color:#64748b;font-size:.8rem"> ${h.from_dept}</span>` : '';
+
+      html += `
+        <div style="position:relative;margin-bottom:1rem;padding-left:1rem">
+          <!-- Timeline dot -->
+          <div style="position:absolute;left:-1.05rem;top:.25rem;width:1rem;height:1rem;
+                      background:${ac.bg};border:2px solid ${ac.color};border-radius:50%;
+                      display:flex;align-items:center;justify-content:center;font-size:.55rem">
+            ${ac.icon}
+          </div>
+          <div style="background:${ac.bg};border:1px solid ${ac.color}33;border-radius:8px;padding:.65rem .85rem">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:.25rem">
+              <span style="font-weight:700;color:${ac.color};font-size:.85rem">${h.action}${arrow}</span>
+              <span style="font-size:.75rem;color:#64748b">${time}</span>
+            </div>
+            ${h.done_by_name ? `<div style="font-size:.8rem;color:#475569;margin-top:.25rem">👤 ${h.done_by_name}</div>` : ''}
+            ${h.remarks      ? `<div style="font-size:.8rem;color:#64748b;margin-top:.35rem;font-style:italic">"${h.remarks}"</div>` : ''}
+          </div>
+        </div>`;
+    });
+    html += '</div>';
+    document.getElementById('historyTrail').innerHTML = html;
+  } catch(e) {
+    document.getElementById('historyTrail').innerHTML =
+      `<p style="color:red">${e.message}</p>`;
+  }
+}
+
+function closeHistoryModal() {
+  document.getElementById('historyModal').classList.remove('open');
+}
+
+async function confirmJobStatus() {
+  const jobId   = document.getElementById('sJobId').value;
+  const status  = document.getElementById('sStatus').value;
+  const remarks = document.getElementById('sRemarks').value.trim();
+  if (!status) { showToast('Please select a status', 'error'); return; }
+
+  const btn = document.querySelector('#jobStatusModal .btn-primary');
+  btn.disabled = true; btn.textContent = 'Updating...';
+  try {
+    await api(`/jobs/${jobId}/status`, {
+      method:'PATCH',
+      body: JSON.stringify({ status, remarks: remarks||null })
+    });
+    showToast(`✅ Job updated to ${status}`);
+    closeJobStatusModal();
+    await loadJobs();
+  } catch(e) { showToast(e.message, 'error'); }
+  finally { btn.disabled = false; btn.textContent = '✅ Update'; }
+}
+
+// ── Quick Close ───────────────────────────────────────────────
+async function quickCloseJob(jobId) {
+  // Find the job in allJobs to check multi-assign state
+  const job = allJobs.find(j => j.id == jobId);
+  if (job && job.is_multi_assign) {
+    const assignments = job.assignments || [];
+    const pending = assignments.filter(a => a.status !== 'COMPLETED');
+    if (pending.length > 0) {
+      const names = pending.map(a => a.department).join(', ');
+      showToast(`Cannot close — pending departments: ${names}`, 'error');
+      return;
+    }
+  }
+  if (!confirm('Close this job?')) return;
+  try {
+    await api(`/jobs/${jobId}/status`, {
+      method:'PATCH',
+      body: JSON.stringify({ status:'CLOSED' })
+    });
+    showToast('✅ Job closed');
+    await loadJobs();
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+// ── Job Detail / Photos ───────────────────────────────────────
+async function openJobDetail(jobId) {
+  try {
+    const data = await api(`/jobs/${jobId}`);
+    const j    = data.data;
+
+    document.getElementById('jd_title').textContent   = j.title;
+    document.getElementById('jd_number').textContent  = j.job_number || '—';
+    document.getElementById('jd_equip').textContent   = j.equipment_name ? `${j.equipment_code} — ${j.equipment_name}` : '—';
+    document.getElementById('jd_dept').textContent    = j.assigned_dept || 'Unassigned';
+    document.getElementById('jd_raised').textContent  = `${j.raised_by_name||'—'} ${j.raised_by_dept ? '('+j.raised_by_dept+')' : ''}`;
+    document.getElementById('jd_plant').textContent   = `${j.plant||'—'} · Shift ${j.shift||'—'}`;
+    document.getElementById('jd_assigned').textContent = j.assigned_to_name || 'Not assigned yet';
+    document.getElementById('jd_created').textContent = new Date(j.created_at).toLocaleString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+
+    // Status badge inline
+    const sk = (j.status||'').replace(/ /g,'-');
+    document.getElementById('jd_status').innerHTML =
+      `<span class="jstatus js-${sk}" style="font-size:.78rem">${j.status}</span>`;
+
+    // Description
+    if (j.description) {
+      document.getElementById('jd_desc').textContent      = j.description;
+      document.getElementById('jd_desc_wrap').style.display = 'block';
+    } else {
+      document.getElementById('jd_desc_wrap').style.display = 'none';
+    }
+
+    // Remarks
+    if (j.remarks) {
+      document.getElementById('jd_remarks').textContent      = j.remarks;
+      document.getElementById('jd_remarks_wrap').style.display = 'block';
+    } else {
+      document.getElementById('jd_remarks_wrap').style.display = 'none';
+    }
+
+    // Photos
+    const photosDiv = document.getElementById('jd_photos');
+    if (j.photos && j.photos.length) {
+      photosDiv.innerHTML = j.photos.map(p => `
+        <a href="${p}" target="_blank" title="Click to open full size">
+          <img src="${p}"
+            style="width:90px;height:90px;object-fit:cover;border-radius:8px;
+                   border:2px solid #e2e8f0;cursor:pointer;transition:transform .15s;"
+            onmouseover="this.style.transform='scale(1.05)'"
+            onmouseout="this.style.transform='scale(1)'">
+        </a>`).join('');
+    } else {
+      photosDiv.innerHTML = '<div style="color:#94a3b8;font-size:.85rem;padding:.5rem 0">No photos attached to this job</div>';
+    }
+
+    document.getElementById('jobDetailModal').classList.add('open');
+  } catch(e) { showToast('Could not load job details: ' + e.message, 'error'); }
+}
+
+function closeJobDetail() {
+  document.getElementById('jobDetailModal').classList.remove('open');
+}
+
+
+function logout() { clearSession(); window.location.href = '../login.html'; }
+
+init();
+</script>
+</body>
+</html>

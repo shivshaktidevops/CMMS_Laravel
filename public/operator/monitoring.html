@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CMMS — Monitoring Entry</title>
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+  .param-card {
+    background:#fff;border-radius:12px;border:1px solid #e2e8f0;
+    margin-bottom:1.25rem;overflow:hidden;
+    box-shadow:0 1px 3px rgba(0,0,0,.06);
+  }
+  .param-card-header {
+    display:flex;justify-content:space-between;align-items:center;
+    padding:.85rem 1.25rem;background:#f8fafc;border-bottom:1px solid #e2e8f0;
+  }
+  .actual-input {
+    width:100%;padding:.45rem .75rem;border:2px solid #e2e8f0;
+    border-radius:7px;font-size:.88rem;transition:border .15s;
+  }
+  .actual-input:focus { outline:none;border-color:#1e40af;box-shadow:0 0 0 3px rgba(30,64,175,.1); }
+  .actual-input.deviation { border-color:#ef4444;background:#fff5f5; }
+  .actual-input.ok { border-color:#22c55e;background:#f0fdf4; }
+  .status-badge {
+    display:inline-block;padding:.25rem .65rem;border-radius:20px;
+    font-size:.75rem;font-weight:700;
+  }
+  .status-ok { background:#dcfce7;color:#166534; }
+  .status-dev { background:#fee2e2;color:#991b1b; }
+  .remarks-input {
+    width:100%;padding:.45rem .75rem;border:2px solid #e2e8f0;
+    border-radius:7px;font-size:.85rem;resize:none;
+  }
+  .dept-section-title {
+    font-weight:700;font-size:.82rem;color:#64748b;
+    text-transform:uppercase;letter-spacing:.5px;
+    padding:.4rem .75rem;background:#f1f5f9;
+    border-radius:6px;margin-bottom:.75rem;margin-top:1.25rem;
+  }
+  .submit-bar {
+    position:sticky;bottom:0;background:#fff;
+    border-top:2px solid #e2e8f0;padding:1rem 1.25rem;
+    display:flex;justify-content:space-between;align-items:center;
+    box-shadow:0 -4px 12px rgba(0,0,0,.08);
+  }
+  .prev-bar {
+    background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;
+    margin-bottom:.75rem;overflow:hidden;
+  }
+  .prev-bar-header {
+    display:flex;justify-content:space-between;align-items:center;
+    padding:.5rem .85rem;cursor:pointer;user-select:none;
+    font-size:.82rem;color:#0369a1;font-weight:600;
+  }
+  .prev-bar-header:hover { background:#e0f2fe; }
+  .prev-bar-body {
+    display:none;padding:.75rem .85rem;border-top:1px solid #bae6fd;
+    background:#fff;overflow-x:auto;
+  }
+  .prev-bar-body.open { display:block; }
+  .prev-reading-table { width:100%;border-collapse:collapse;font-size:.8rem; }
+  .prev-reading-table th, .prev-reading-table td { padding:.35rem .5rem;text-align:left;border-bottom:1px solid #f1f5f9; }
+  .dynamic-single-row, .zone-values-row {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: .75rem;
+    align-items: flex-start;
+  }
+  .add-dynamic-box-btn:hover { background: #fde68a !important; }
+  .remove-row-btn:hover { background: #fecaca !important; }
+  .monitoring-section { margin-top: 0.75rem; border-top: 1px solid #e2e8f0; padding-top: 0.75rem; }
+  .monitoring-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  .monitoring-table th, .monitoring-table td { padding: 0.4rem 0.5rem; text-align: left; border-bottom: 1px solid #f1f5f9; }
+  .monitoring-table th { font-weight: 700; color: #1e40af; background: #f8fafc; }
+  .mon-input { width: 100%; padding: 0.35rem; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.83rem; text-align: center; }
+  .mon-remarks { width: 100%; padding: 0.35rem; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 0.82rem; resize: none; }
+</style>
+</head>
+<body>
+
+<header class="cmms-header">
+  <div class="logo">🏭 Plant CMMS <span>Monitoring Entry</span></div>
+  <div style="display:flex;align-items:center;gap:.75rem">
+    <div class="user-info" id="headerUser"></div>
+    <button class="btn-logout" onclick="goBack()">← Back</button>
+    <button class="btn-logout" onclick="logout()">Logout</button>
+  </div>
+</header>
+
+<div class="page">
+  <div class="card" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem;padding:.9rem 1.25rem;margin-bottom:1rem">
+    <div style="display:flex;gap:1.5rem;flex-wrap:wrap">
+      <div><strong>Shift:</strong> <span id="infoShift" style="color:var(--primary);font-weight:700"></span></div>
+      <div><strong>Plant:</strong> <span id="infoPlant" style="color:var(--primary);font-weight:700"></span></div>
+      <div><strong>Department:</strong> <span id="infoDept" style="color:var(--primary);font-weight:700"></span></div>
+      <div><strong>Date:</strong> <span id="infoDate" style="color:#64748b;font-weight:600"></span></div>
+    </div>
+    <div id="submissionStatus"></div>
+  </div>
+  <div id="paramContainer"><div class="loading">Loading monitoring...</div></div>
+</div>
+
+<div class="submit-bar" id="submitBar" style="display:none">
+  <div style="font-size:.88rem;color:#64748b">
+    <span id="filledCount">0</span> of <span id="totalCount">0</span> monitoring filled
+    <span id="deviationWrapper"> · <span id="deviationCount" style="color:#ef4444;font-weight:600">0 deviations</span></span>
+  </div>
+  <button class="btn btn-primary" onclick="submitAllmonitoring()" id="submitBtn">✅ Submit Monitoring Entries</button>
+</div>
+
+<script src="../shared/cmms.js"></script>
+<script>
+let user, currentShift, currentPlant, currentDept;
+let allParams = [];
+let submittedToday = false;
+let prevLogs24hr = {};
+let submittedMonitoringMap = {};
+let prevMonitoringLogs24hr = [];
+let equipmentMonitoring = {};
+let submittedHoursMap = {};
+
+function isGeneralShift() { const hour = new Date().getHours(); return hour >= 9 && hour < 18; }
+
+async function init() {
+  user = requireAuth(['operator', 'admin']);
+  if (!user) return;
+  currentShift = user.selectedShift || user.shift || '';
+  currentPlant = user.selectedPlant || '';
+  currentDept  = user.department || '';
+  if (!currentShift || !currentPlant) {
+    showToast('Missing shift or plant info. Please login again.', 'error');
+    setTimeout(() => window.location.href = '../login.html', 2000);
+    return;
+  }
+  document.getElementById('headerUser').innerHTML = `<strong>${user.full_name}</strong>`;
+  document.getElementById('infoShift').textContent = `Shift ${currentShift}`;
+  document.getElementById('infoPlant').textContent = currentPlant;
+  document.getElementById('infoDept').textContent  = currentDept || 'All Departments';
+  document.getElementById('infoDate').textContent  = new Date().toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
+  await checkAlreadySubmitted();
+  await loadmonitoring();
+}
+
+async function checkAlreadySubmitted() {
+  try {
+    const data = await api(`/shift-monitoring/logs/today?plant=${currentPlant}&shift=${currentShift}&department=${currentDept}`);
+    const logMap = data.data || {};
+    submittedHoursMap = {};
+    let anySubmitted = false;
+    Object.entries(logMap).forEach(([eqId, info]) => {
+      submittedHoursMap[eqId] = info.submitted_hours || [];
+      if (info.submitted) anySubmitted = true;
+    });
+    submittedToday = anySubmitted;
+    if (anySubmitted) {
+      document.getElementById('submissionStatus').innerHTML = `<span style="background:#dcfce7;color:#166534;padding:.3rem .8rem;border-radius:20px;font-size:.8rem;font-weight:600">✅ Shift ${currentShift} — Some entries submitted</span>`;
+    }
+    try {
+      const prev = await api(`/shift-monitoring/logs/24hr?plant=${currentPlant}&department=${currentDept}`);
+      prevLogs24hr = {};
+      (prev.data || []).forEach(log => {
+        const eId = log.equipment_id.toString();
+        if (!prevLogs24hr[eId]) prevLogs24hr[eId] = [];
+        prevLogs24hr[eId].push(log);
+      });
+    } catch(e) { console.warn('shift-monitoring/logs/24hr fetch failed:', e.message); }
+    try {
+      const monToday = await api(`/eq-monitoring/logs/today?plant=${currentPlant}&shift=${currentShift}&department=${currentDept}`);
+      submittedMonitoringMap = {};
+      (monToday.data || []).forEach(mId => { submittedMonitoringMap[mId] = true; });
+    } catch(e) { console.warn('eq-monitoring/logs/today fetch failed:', e.message); }
+    try {
+      const prevMon = await api(`/eq-monitoring/logs/24hr?plant=${currentPlant}&department=${currentDept}`);
+      prevMonitoringLogs24hr = prevMon.data || [];
+    } catch(e) { console.warn('eq-monitoring/logs/24hr fetch failed:', e.message); }
+    try {
+      const monAll = await api(`/eq-monitoring/all?plant=${currentPlant}&department=${currentDept}`);
+      equipmentMonitoring = {};
+      (monAll.data || []).forEach(m => {
+        const eId = m.equipment_id.toString();
+        if (!equipmentMonitoring[eId]) equipmentMonitoring[eId] = [];
+        equipmentMonitoring[eId].push(m);
+      });
+    } catch(e) { console.warn('eq-monitoring/all fetch failed:', e.message); }
+  } catch(e) { console.warn('checkAlreadySubmitted:', e); }
+}
+
+async function loadmonitoring() {
+  try {
+    const dept = currentDept || 'All';
+    const data = await api(`/shift-monitoring/all?plant=${currentPlant}&department=${dept}`);
+    const equipment = data.data || [];
+    if (!equipment.length) {
+      document.getElementById('paramContainer').innerHTML = `<div class="empty-state"><div class="icon">📋</div><p>No monitoring parameters set up for your department yet.</p></div>`;
+      return;
+    }
+    allParams = equipment;
+    rendermonitoring(equipment);
+    setTimeout(updateCounts, 50);
+  } catch(e) {
+    document.getElementById('paramContainer').innerHTML = `<div class="empty-state"><div class="icon">❌</div><p>${e.message}</p></div>`;
+  }
+}
+
+function rendermonitoring(equipment) {
+  const depts = {};
+  equipment.forEach(eq => { if (!depts[eq.department]) depts[eq.department] = []; depts[eq.department].push(eq); });
+  let html = '';
+  const isProcessDept = user && user.department && user.department.toLowerCase() === 'process';
+  if (isProcessDept && submittedToday) {
+    html += `<div class="info-message" style="margin-bottom:1rem; background:#e0f2fe; padding:.8rem; border-radius:8px; border-left:4px solid #0369a1;">ℹ️ <strong>Shift ${currentShift}</strong> - Previous submissions shown below. You can submit for other equipment.</div>`;
+  }
+  Object.entries(depts).forEach(([dept, eqList]) => {
+    html += `<div class="dept-section-title">🏢 ${dept}</div>`;
+    eqList.forEach(eq => {
+      if (eq.hourly_entry) { html += renderHourlyCard(eq); }
+      else { html += renderNormalCard(eq); }
+    });
+  });
+  document.getElementById('paramContainer').innerHTML = html;
+}
+
+function buildPrevBar(eq) {
+  const logs = prevLogs24hr[eq.id.toString()] || [];
+  if (!logs.length) return '';
+  const params = eq.monitoring || [];
+  if (!params.length) return '';
+  
+  // IMPORTANT: Deduplicate logs by their unique ID to prevent showing same entry twice
+  const uniqueLogs = [];
+  const seenLogIds = new Set();
+  for (const log of logs) {
+    if (!seenLogIds.has(log.id)) {
+      seenLogIds.add(log.id);
+      uniqueLogs.push(log);
+    }
+  }
+  
+  // Also deduplicate by timestamp+shift combination as fallback
+  const finalLogs = [];
+  const seenKeys = new Set();
+  for (const log of uniqueLogs) {
+    const key = `${log.shift}_${log.logged_at}_${log.logged_by}`;
+    if (!seenKeys.has(key)) {
+      seenKeys.add(key);
+      finalLogs.push(log);
+    }
+  }
+  
+  // Sort by logged_at descending (newest first)
+  finalLogs.sort((a, b) => new Date(b.logged_at) - new Date(a.logged_at));
+  
+  if (!finalLogs.length) return '';
+  
+  // Check if this equipment has zones (Kiln only)
+  const zoneParam = params.find(p => p.columns && p.columns.length > 0);
+  const hasZones = !!zoneParam;
+  
+  if (hasZones && zoneParam.columns) {
+    // ZONE-SPECIFIC DISPLAY FOR KILN EQUIPMENT ONLY
+    const zones = zoneParam.columns;
+    const zoneLabels = zones.map(z => typeof z === 'string' ? z : (z.label || z));
+    
+    // Build column headers for each log entry (max 5 recent logs to avoid clutter)
+    const displayLogs = finalLogs.slice(0, 5);
+    let headCols = `<th style="padding:.4rem .6rem;text-align:left;color:#64748b;font-weight:600;min-width:100px">Zone</th>`;
+    
+    displayLogs.forEach(log => {
+      const logTime = new Date(log.logged_at);
+      const timeStr = logTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      const dateStr = logTime.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+      
+      headCols += `<th style="padding:.4rem .6rem;text-align:center;color:#0369a1;font-weight:700;min-width:100px;border-left:1px solid #e2e8f0">
+        <div>Shift ${log.shift}</div>
+        <div style="font-size:.7rem;color:#64748b;font-weight:400">${dateStr} ${timeStr}</div>
+        <div style="font-size:.7rem;color:#94a3b8;font-weight:400">👤 ${log.logged_by_name || '—'}</div>
+      </th>`;
+    });
+    
+    // Build rows for each zone
+    let bodyRows = '';
+    zoneLabels.forEach((zone, zoneIdx) => {
+      let row = `<td style="padding:.4rem .6rem;font-weight:600;font-size:.82rem;background:#f8fafc">${zone}</td>`;
+      
+      displayLogs.forEach(log => {
+        let zoneValue = '—';
+        let remarks = '';
+        let status = '';
+        
+        const readings = log.readings || [];
+
+// Find reading for this specific zone + parameter
+const reading = readings.find(
+
+   r =>
+
+      r.parameter_id === zoneParam.id &&
+
+      r.zone_label === zone
+
+);
+
+if (reading && reading.actual_value) {
+
+   zoneValue = reading.actual_value;
+
+   remarks = reading.remarks || '';
+
+   status = reading.status || '';
+
+}
+        
+        const isOk = status === 'OK' || (!status && zoneValue !== '—');
+        const icon = isOk ? '✓' : '●';
+        const color = isOk ? '#16a34a' : '#0369a1';
+        
+        row += `<td style="padding:.4rem .6rem;text-align:center;border-left:1px solid #f1f5f9">
+          <div style="font-weight:700;color:${color}">${icon} ${zoneValue}</div>
+          ${remarks ? `<div style="font-size:.7rem;color:#64748b;font-style:italic;margin-top:.15rem">${remarks}</div>` : ''}
+        </td>`;
+      });
+      
+      bodyRows += `<tr style="border-bottom:1px solid #f1f5f9">${row}</td>`;
+    });
+    
+    const uid = 'prev_' + eq.id;
+    const latest = displayLogs[0];
+    const latestShift = latest.shift ? 'Shift ' + latest.shift : '';
+    const latestTime = new Date(latest.logged_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const latestDate = new Date(latest.logged_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+    
+    return `<div class="prev-bar">
+      <div class="prev-bar-header" onclick="togglePrevBar('${uid}')">
+        <span>📋 Previous zone readings · Last: ${latestShift} · ${latest.logged_by_name || '—'} · ${latestDate} ${latestTime}</span>
+        <span id="${uid}_arrow">▼</span>
+      </div>
+      <div class="prev-bar-body" id="${uid}">
+        <div style="overflow-x:auto">
+          <table class="prev-reading-table" style="width:100%;border-collapse:collapse;font-size:.8rem">
+            <thead><tr style="background:#f8fafc">${headCols}</tr></thead>
+            <tbody>${bodyRows}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+  }
+  
+  // ORIGINAL DISPLAY FOR ALL NON-ZONE EQUIPMENT
+  // Limit to last 5 logs to keep display clean
+  const displayLogs = finalLogs.slice(0, 5);
+  let headCols = `<th style="padding:.4rem .6rem;text-align:left;color:#64748b;font-weight:600;min-width:140px">Parameter</th>`;
+  
+  displayLogs.forEach(log => {
+    const logTime = new Date(log.logged_at);
+    const timeStr = logTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    const dateStr = logTime.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+    
+    headCols += `<th style="padding:.4rem .6rem;text-align:center;color:#0369a1;font-weight:700;min-width:90px;border-left:1px solid #e2e8f0">
+      <div>${log.hour_number ? 'Hr ' + log.hour_number : 'Shift ' + log.shift}</div>
+      <div style="font-size:.7rem;color:#64748b;font-weight:400">${dateStr} ${timeStr}</div>
+      <div style="font-size:.7rem;color:#94a3b8;font-weight:400">👤 ${log.logged_by_name || '—'}</div>
+    </th>`;
+  });
+  
+  let bodyRows = '';
+  params.forEach(p => {
+    let row = `<td style="padding:.4rem .6rem;font-weight:600;font-size:.82rem">${p.parameter_name}${p.unit ? ' <span style="color:#94a3b8;font-size:.72rem">(' + p.unit + ')</span>' : ''}</td>`;
+    
+    displayLogs.forEach(log => {
+      const reading = log.readings.find(r => r.parameter_id === p.id);
+      if (!reading || !reading.actual_value) {
+        row += `<td style="padding:.4rem .6rem;text-align:center;color:#cbd5e1;border-left:1px solid #f1f5f9">—</td>`;
+      } else {
+        const isDev = reading.status === 'DEVIATION';
+        const isOk = reading.status === 'OK';
+        const bg = isDev ? '#fff1f2' : isOk ? '#f0fdf4' : '#f0f9ff';
+        const col_ = isDev ? '#dc2626' : isOk ? '#16a34a' : '#0369a1';
+        const icon = isDev ? '🔴' : isOk ? '✓' : '●';
+        const rem = reading.remarks ? `<div style="font-size:.7rem;color:#64748b;font-style:italic;margin-top:.15rem">${reading.remarks}</div>` : '';
+        
+        row += `<td style="padding:.4rem .6rem;text-align:center;background:${bg};border-left:1px solid #f1f5f9">
+          <div style="font-weight:700;color:${col_}">${icon} ${reading.actual_value}</div>
+          ${rem}
+        </td>`;
+      }
+    });
+    bodyRows += `<tr style="border-bottom:1px solid #f1f5f9">${row}</tr>`;
+  });
+  
+  const uid = 'prev_' + eq.id;
+  const latest = displayLogs[0];
+  const latestShift = latest.shift ? 'Shift ' + latest.shift : '';
+  const latestHour = latest.hour_number ? ' · Hr ' + latest.hour_number : '';
+  const latestTime = new Date(latest.logged_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  const latestDate = new Date(latest.logged_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+  
+  return `<div class="prev-bar">
+    <div class="prev-bar-header" onclick="togglePrevBar('${uid}')">
+      <span>📋 Previous readings · Last: ${latestShift}${latestHour} · ${latest.logged_by_name || '—'} · ${latestDate} ${latestTime}</span>
+      <span id="${uid}_arrow">▼</span>
+    </div>
+    <div class="prev-bar-body" id="${uid}">
+      <div style="overflow-x:auto">
+        <table class="prev-reading-table">
+          <thead>${headCols}</thead>
+          <tbody>${bodyRows}</tbody>
+        </table>
+      </div>
+    </div>
+  </div>`;
+}
+function togglePrevBar(uid) { const body = document.getElementById(uid); const arrow = document.getElementById(uid + '_arrow'); if (!body) return; const isOpen = body.classList.toggle('open'); if (arrow) arrow.textContent = isOpen ? '▲' : '▼'; }
+
+function buildMonitoringSections(eq) {
+  const monTypes = equipmentMonitoring[eq.id.toString()] || [];
+  if (!monTypes.length) return '';
+  return monTypes.map(mon => {
+    const isSubmitted = !!submittedMonitoringMap[mon.id];
+    const cols = mon.columns || [];
+    const refs = mon.reference_values || [];
+    const isGenShiftOnly = !!mon.general_shift_only;
+    const isUnlocked = !!mon.is_unlocked;
+    const inGeneralShift = isGeneralShift();
+    const isLocked = isGenShiftOnly && !inGeneralShift && !isUnlocked;
+    const prevLog = prevMonitoringLogs24hr.find(l => l.monitoring_id === mon.id);
+    let prevHtml = '';
+    if (prevLog) {
+      const t = new Date(prevLog.logged_at).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+      const d = new Date(prevLog.logged_at).toLocaleDateString('en-GB',{day:'2-digit',month:'short'});
+      const readings = (prevLog.readings || []).map(r => `${r.label}: ${r.value||'—'}`).join(' | ');
+      prevHtml = `<div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;padding:.4rem .75rem;margin-bottom:.5rem;font-size:.78rem;color:#0369a1">📋 Last: Shift ${prevLog.shift} · ${prevLog.logged_by_name||'—'} · ${d} ${t} &nbsp;|&nbsp; ${readings}</div>`;
+    }
+    const refBadges = refs.map(r => `<span style="background:#fef3c7;color:#92400e;border-radius:4px;padding:.1rem .4rem;font-size:.72rem;font-weight:600">${r.label}: ${r.value}${mon.unit ? ' ' + mon.unit : ''}</span>`).join('');
+    const colHeaders = cols.map(col => `<th style="text-align:center;font-weight:700;font-size:.78rem;color:#1e40af;min-width:80px">${col.label}</th>`).join('');
+    const inputCells = cols.map((col, i) => `<td style="text-align:center"><input type="number" step="any" class="mon-input" id="mon_${mon.id}_col_${i}" placeholder="—" data-mon-id="${mon.id}" data-eq-id="${eq.id}" data-eq-dept="${eq.department}" data-col-idx="${i}" data-col-label="${col.label}" style="width:100%;padding:.35rem .4rem;border:1px solid ${isLocked?'#fca5a5':'#e2e8f0'};border-radius:6px;font-size:.83rem;text-align:center;background:${isLocked?'#fff1f2':'#fff'}" ${isSubmitted || isLocked ? 'disabled' : ''}></td>`).join('');
+    return `<div class="monitoring-section"><div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.5rem"><span style="font-weight:700;font-size:.85rem;color:#1e40af">📡 ${mon.monitoring_name}</span>${mon.unit ? `<span style="background:#eff6ff;color:#1e40af;border-radius:4px;padding:.1rem .4rem;font-size:.72rem">${mon.unit}</span>` : ''}${refBadges}${isGenShiftOnly && !inGeneralShift && !isUnlocked ? '<span style="background:#fee2e2;color:#991b1b;border-radius:4px;padding:.15rem .6rem;font-size:.75rem;font-weight:700">🔒 General Shift Only</span>' : ''}${isSubmitted ? '<span style="background:#dcfce7;color:#166534;border-radius:4px;padding:.1rem .5rem;font-size:.72rem;margin-left:auto">✅ Submitted</span>' : ''}</div>${prevHtml}<table class="monitoring-table"><thead><tr>${colHeaders}<th style="text-align:left">REMARKS</th></tr></thead><tbody><tr>${inputCells}<td><textarea class="mon-remarks" rows="1" id="mon_remarks_${mon.id}" data-mon-id="${mon.id}" placeholder="Remarks..." ${isSubmitted || isLocked ? 'disabled' : ''}></textarea></td></tr></tbody></table></div>${isLocked ? `<div style="margin-top:.5rem;background:#fff1f2;border:1px solid #fca5a5;border-radius:8px;padding:.6rem .85rem;font-size:.82rem;color:#991b1b">🔒 Locked — General Shift only (9AM–6PM). Ask admin to unlock.</div>` : ''}`;
+  }).join('');
+}
+
+function renderStaticParameterRow(p, eq) {
+  return `
+  <div style="margin-bottom: 0.5rem; border-bottom: 1px solid #f1f5f9; padding-bottom: 0.5rem;">
+
+    <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.3rem;">
+      <strong>${p.parameter_name}</strong>
+      ${p.unit ? `<span style="color:#94a3b8;font-size:.78rem">(${p.unit})</span>` : ''}
+    </div>
+
+    <table style="width:100%; border-collapse:collapse;">
+      <thead>
+        <tr>
+          <th style="text-align:left; font-size:.75rem; color:#64748b; padding:.2rem .3rem;">Standard</th>
+          <th style="text-align:left; font-size:.75rem; color:#64748b; padding:.2rem .3rem;">Actual Value</th>
+          <th style="text-align:left; font-size:.75rem; color:#64748b; padding:.2rem .3rem;">Status</th>
+          <th style="text-align:left; font-size:.75rem; color:#64748b; padding:.2rem .3rem;">Remarks</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        <tr>
+
+          <td style="padding:.2rem .3rem;">
+            <strong style="color:#1e40af">
+              ${p.standard_value || '—'}
+            </strong>
+          </td>
+
+          <td style="padding:.2rem .3rem;">
+            <input
+              type="text"
+              class="actual-input static-input"
+              id="static_${p.id}"
+              data-param-id="${p.id}"
+              data-eq-id="${eq.id}"
+              data-eq-dept="${eq.department || ''}"
+              data-std="${p.standard_value || ''}"
+              placeholder="Enter value"
+              style="width:100%"
+              oninput="onStaticInput(this)">
+          </td>
+
+          <td style="padding:.2rem .3rem;">
+            <span class="status-badge" id="status_${p.id}">—</span>
+          </td>
+
+          <td style="padding:.2rem .3rem;">
+            <textarea
+              class="remarks-input"
+              id="static_remarks_${p.id}"
+              rows="1"
+              placeholder="Remarks..."
+              style="width:100%">
+            </textarea>
+          </td>
+
+        </tr>
+      </tbody>
+    </table>
+
+  </div>`;
+}
+
+function renderDynamicParameterRow(p, eq) {
+  return `<div class="param-card" data-eq-id="${eq.id}" data-eq-dept="${eq.department || ''}" style="margin-bottom: 1rem; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;"><div style="background: #f8fafc; padding: .5rem .75rem; border-bottom: 1px solid #e2e8f0;"><strong style="font-size:.9rem">⚡ ${p.parameter_name}</strong>${p.unit ? `<span style="color:#94a3b8;font-size:.75rem;margin-left:.5rem">(${p.unit})</span>` : ''}</div><div style="padding: .75rem;"><div id="dynamic_single_rows_container_${p.id}"><div class="dynamic-single-row" data-row-idx="0" style="display: flex; gap: 1rem; margin-bottom: .75rem; align-items: flex-start;"><div style="flex: 2;"><input type="text" class="actual-input dynamic-value-input" id="dynamic_val_${p.id}_row0" data-param-id="${p.id}" data-row-idx="0" data-eq-id="${eq.id}" data-eq-dept="${eq.department || ''}" data-std="${p.standard_value || ''}" oninput="onDynamicInput(this)" placeholder="Enter value" style="width: 100%; padding: .35rem; border: 1px solid #cbd5e1; border-radius: 4px;"></div><div style="flex: 2;"><textarea class="remarks-input" id="dynamic_remarks_${p.id}_row0" rows="1" placeholder="Remarks..." style="width: 100%; font-size: .75rem; resize: none;"></textarea></div><button type="button" class="remove-row-btn" onclick="removeDynamicRow(${p.id}, 0)" style="background: #fee2e2; color: #991b1b; border: none; border-radius: 4px; padding: .3rem .6rem; cursor: pointer; font-size: .7rem; display: none;">✕</button></div></div><button type="button" class="add-dynamic-box-btn" onclick="addDynamicRow(${p.id})" style="margin-top: .75rem; background: #fef3c7; border: 1px solid #fcd34d; color: #92400e; padding: .4rem .8rem; border-radius: 6px; font-size: .75rem; cursor: pointer;">➕ Add Another Reading Row</button></div></div>`;
+}
+
+function addDynamicRow(paramId) {
+  const container = document.getElementById(`dynamic_single_rows_container_${paramId}`);
+  if (!container) return;
+  const rowCount = container.children.length;
+  const newRowIdx = rowCount;
+  const firstRow = container.querySelector('.dynamic-single-row');
+  const stdValue = firstRow ? (firstRow.querySelector('.dynamic-value-input')?.dataset.std || '') : '';
+  const div = document.createElement('div');
+  div.className = 'dynamic-single-row';
+  div.setAttribute('data-row-idx', newRowIdx);
+  div.style.cssText = 'display: flex; gap: 1rem; margin-bottom: .75rem; align-items: flex-start;';
+
+  const eqId =
+  firstRow?.querySelector('.dynamic-value-input')?.dataset.eqId || '';
+
+  const eqDept =
+  firstRow?.querySelector('.dynamic-value-input')?.dataset.eqDept || '';
+
+  div.innerHTML = `
+<div style="flex: 2;">
+<input type="text" class="actual-input dynamic-value-input"
+id="dynamic_val_${paramId}_row${newRowIdx}"
+data-param-id="${paramId}"
+data-row-idx="${newRowIdx}"
+data-eq-id="${eqId}"
+data-eq-dept="${eqDept}"
+data-std="${stdValue}"
+oninput="onDynamicInput(this)"
+placeholder="Enter value"
+style="width: 100%; padding: .35rem; border: 1px solid #cbd5e1; border-radius: 4px;">
+</div>
+
+<div style="flex: 2;">
+<textarea class="remarks-input"
+id="dynamic_remarks_${paramId}_row${newRowIdx}"
+rows="1"
+placeholder="Remarks..."
+style="width: 100%; font-size: .75rem; resize: none;"></textarea>
+</div>
+
+<button type="button"
+class="remove-row-btn"
+onclick="removeDynamicRow(${paramId}, ${newRowIdx})"
+style="background: #fee2e2; color: #991b1b; border: none; border-radius: 4px; padding: .3rem .6rem; cursor: pointer; font-size: .7rem;">
+✕
+</button>`;
+
+ container.appendChild(div);
+  updateCounts();
+  showToast('New reading row added', 'info');
+}
+
+function removeDynamicRow(paramId, rowIdx) {
+  const container = document.getElementById(`dynamic_single_rows_container_${paramId}`);
+  if (!container) return;
+  const rows = container.querySelectorAll('.dynamic-single-row');
+  const targetRow = Array.from(rows).find(row => row.getAttribute('data-row-idx') == rowIdx);
+  if (targetRow && rows.length > 1) { targetRow.remove(); updateCounts(); showToast('Row removed', 'info'); }
+  else if (rows.length === 1) { showToast('Cannot remove the last row', 'error'); }
+}
+
+// Add this function after removeDynamicRow and before onDynamicInput
+function addValueRow(paramId, numZones) {
+  const container = document.getElementById(`dynamic_rows_container_${paramId}`);
+  if (!container) return;
+  
+  const rowCount = container.children.length;
+  const newRowIdx = rowCount;
+  
+  // Get equipment info from an existing input
+  const existingRow = container.querySelector('.zone-values-row');
+  const eqId = existingRow?.querySelector('.zone-value-input')?.dataset.eqId || '';
+  const eqDept = existingRow?.querySelector('.zone-value-input')?.dataset.eqDept || '';
+  
+  // Get the zones from the first input
+  const zoneInputs = existingRow?.querySelectorAll('.zone-value-input') || [];
+  const zones = Array.from(zoneInputs).map(inp => ({
+    idx: inp.dataset.zoneIdx,
+    label: inp.dataset.zoneLabel
+  }));
+  
+  // Create new row div
+  const div = document.createElement('div');
+  div.className = 'zone-values-row';
+  div.setAttribute('data-row-idx', newRowIdx);
+  div.style.cssText = 'display: flex; gap: 1rem; margin-bottom: .75rem; align-items: flex-start;';
+  
+  // Build zone input HTML
+  let zonesHtml = '';
+  zones.forEach(zone => {
+    zonesHtml += `
+      <div style="min-width: 80px;">
+        <input type="text" class="actual-input zone-value-input"
+          id="zone_${paramId}_${zone.idx}_row${newRowIdx}"
+          data-param-id="${paramId}"
+          data-zone-idx="${zone.idx}"
+          data-row-idx="${newRowIdx}"
+          data-zone-label="${zone.label}"
+          data-eq-id="${eqId}"
+          data-eq-dept="${eqDept}"
+          placeholder="${zone.label}"
+          style="width: 100%; text-align: center; padding: .35rem; border: 1px solid #cbd5e1; border-radius: 4px;">
+      </div>
+    `;
+  });
+  
+  div.innerHTML = `
+    ${zonesHtml}
+    <div style="min-width: 150px;">
+      <textarea class="remarks-input" id="zone_remarks_${paramId}_row${newRowIdx}"
+        rows="1" placeholder="Remarks..." style="width: 100%; font-size: .75rem; resize: none;"></textarea>
+    </div>
+    <button type="button" class="remove-row-btn" onclick="removeValueRow(${paramId}, ${newRowIdx})" 
+      style="background: #fee2e2; color: #991b1b; border: none; border-radius: 4px; padding: .3rem .6rem; cursor: pointer; font-size: .7rem;">
+      ✕
+    </button>
+  `;
+  
+  container.appendChild(div);
+  updateCounts();
+  showToast('New zone reading row added', 'info');
+}
+
+function removeValueRow(paramId, rowIdx) {
+  const container = document.getElementById(`dynamic_rows_container_${paramId}`);
+  if (!container) return;
+  
+  const rows = container.querySelectorAll('.zone-values-row');
+  const targetRow = Array.from(rows).find(row => row.getAttribute('data-row-idx') == rowIdx);
+  
+  if (targetRow && rows.length > 1) {
+    targetRow.remove();
+    updateCounts();
+    showToast('Row removed', 'info');
+  } else if (rows.length === 1) {
+    showToast('Cannot remove the last row', 'error');
+  }
+}
+
+function onDynamicInput(input) {
+  const std = input.dataset.std;
+  const actual = input.value.trim();
+  if (!actual) { input.classList.remove('ok', 'deviation'); updateCounts(); return; }
+  if (!std) { input.classList.add('ok'); input.classList.remove('deviation'); updateCounts(); return; }
+  const isDeviation = actual !== std;
+  if (isDeviation) { input.classList.add('deviation'); input.classList.remove('ok'); }
+  else { input.classList.add('ok'); input.classList.remove('deviation'); }
+  updateCounts();
+}
+
+function renderHorizontalZoneRow(p, eq) {
+  const zones = p.columns || [];
+  if (!zones.length) return renderStaticParameterRow(p, eq);
+  
+  console.log("Rendering Horizontal Zone Row for:", p.parameter_name, "Zones:", zones);
+  
+  return `
+    <div class="param-card" data-eq-id="${eq.id}" data-eq-dept="${eq.department || ''}" style="margin-bottom: 1rem; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+      <div style="background: #f8fafc; padding: .5rem .75rem; border-bottom: 1px solid #e2e8f0;">
+        <strong style="font-size:.9rem">${p.parameter_name}</strong>
+        ${p.unit ? `<span style="color:#94a3b8;font-size:.75rem;margin-left:.5rem">(${p.unit})</span>` : ''}
+      </div>
+      <div style="overflow-x: auto; padding: .75rem;">
+        <!-- Zone Headers Row -->
+        <div style="display: flex; gap: 1rem; margin-bottom: .5rem; border-bottom: 1px solid #e2e8f0; padding-bottom: .5rem;">
+          ${zones.map(zone => {
+            const zoneLabel = typeof zone === 'string' ? zone : (zone.label || zone);
+            return `<div style="min-width: 80px; text-align: center; font-weight: 700; color: #1e40af; background: #f0f9ff; padding: .5rem; border-radius: 6px;">${zoneLabel}</div>`;
+          }).join('')}
+          <div style="min-width: 150px; text-align: center; font-weight: 700; color: #64748b; background: #f8fafc; padding: .5rem; border-radius: 6px;">Remarks</div>
+        </div>
+        
+        <!-- Value Rows Container -->
+        <div id="dynamic_rows_container_${p.id}">
+          <!-- Initial Row -->
+          <div class="zone-values-row" data-row-idx="0" style="display: flex; gap: 1rem; margin-bottom: .75rem; align-items: flex-start;">
+            ${zones.map((zone, idx) => {
+              const zoneLabel = typeof zone === 'string' ? zone : (zone.label || zone);
+              return `
+                <div style="min-width: 80px;">
+                  <input type="text" class="actual-input zone-value-input"
+                    id="zone_${p.id}_${idx}_row0"
+                    data-param-id="${p.id}"
+                    data-zone-idx="${idx}"
+                    data-row-idx="0"
+                    data-zone-label="${zoneLabel}"
+                    data-eq-id="${eq.id}"
+                    data-eq-dept="${eq.department || ''}"
+                    placeholder="${zoneLabel}"
+                    style="width: 100%; text-align: center; padding: .35rem; border: 1px solid #cbd5e1; border-radius: 4px;">
+                </div>
+              `;
+            }).join('')}
+            <div style="min-width: 150px;">
+              <textarea class="remarks-input" id="zone_remarks_${p.id}_row0"
+                rows="1" placeholder="Remarks..." style="width: 100%; font-size: .75rem; resize: none;"></textarea>
+            </div>
+            <button type="button" class="remove-row-btn" onclick="removeValueRow(${p.id}, 0)" 
+              style="background: #fee2e2; color: #991b1b; border: none; border-radius: 4px; padding: .3rem .6rem; cursor: pointer; font-size: .7rem; display: none;">✕</button>
+          </div>
+        </div>
+        
+        <!-- Add Row Button -->
+        <button type="button" class="add-dynamic-box-btn" onclick="addValueRow(${p.id}, ${zones.length})" 
+          style="margin-top: .75rem; background: #fef3c7; border: 1px solid #fcd34d; color: #92400e; padding: .4rem .8rem; border-radius: 6px; font-size: .75rem; cursor: pointer;">
+          ➕ Add Another Reading Row
+        </button>
+        <p style="font-size: .7rem; color: #64748b; margin-top: .4rem;">
+          Each new row allows you to enter another set of values for all zones.
+        </p>
+      </div>
+    </div>
+  `;
+}
+
+function addZoneRow(monId, zone, eqId, dept) {
+
+   const container =
+      document.getElementById(
+         `zone_container_${monId}_${zone}`
+      );
+
+   const div =
+      document.createElement('div');
+
+   div.className = 'zone-row';
+
+   div.innerHTML = `
+
+      <input
+         type="text"
+
+         class="mon-input"
+
+         data-mon-id="${monId}"
+         data-eq-id="${eqId}"
+         data-eq-dept="${dept}"
+
+         data-col-label="${zone}"
+
+         placeholder="${zone}"
+
+         style="
+            width:100%;
+            margin-top:.4rem;">
+
+   `;
+
+   container.appendChild(div);
+
+}
+
+function onStaticInput(input) {
+  const std = input.dataset.std;
+  const actual = input.value.trim();
+  const paramId = input.dataset.paramId;
+  const statusEl = document.getElementById(`status_${paramId}`);
+  if (!actual) { input.classList.remove('ok', 'deviation'); if (statusEl) statusEl.innerHTML = '—'; updateCounts(); return; }
+  if (!std) { input.classList.add('ok'); input.classList.remove('deviation'); if (statusEl) { statusEl.innerHTML = '✔'; statusEl.className = 'status-badge status-ok'; } updateCounts(); return; }
+  const isDeviation = actual !== std;
+  if (isDeviation) { input.classList.add('deviation'); input.classList.remove('ok'); if (statusEl) { statusEl.innerHTML = '🔴 DEV'; statusEl.className = 'status-badge status-dev'; } }
+  else { input.classList.add('ok'); input.classList.remove('deviation'); if (statusEl) { statusEl.innerHTML = '🟢 OK'; statusEl.className = 'status-badge status-ok'; } }
+  updateCounts();
+}
+
+function renderNormalCard(eq) {
+
+  const isProcessDept =
+    user &&
+    user.department &&
+    user.department.toLowerCase() === 'process';
+
+  if (eq.code === 'SG-01-225' || eq.code === 'SG-01') {
+
+  console.log(
+    "TARGET EQUIPMENT:",
+    eq.code
+  );
+
+  console.log(
+    "MONITORING OBJECT:",
+    JSON.stringify(eq.monitoring, null, 2)
+  );
+
+}
+
+  return `<div class="param-card" data-eq-id="${eq.id}" data-eq-dept="${eq.department || ''}">${buildPrevBar(eq)}<div class="param-card-header"><div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap"><strong style="font-size:.95rem">${eq.name}</strong><span style="font-size:.78rem;color:#64748b">${eq.code}</span></div></div><div id="eq_params_${eq.id}">${(eq.monitoring || []).map(p => { if (isProcessDept && p.columns && p.columns.length > 0) { return renderHorizontalZoneRow(p, eq); } if (isProcessDept && p.is_dynamic) { return renderDynamicParameterRow(p, eq); } return renderStaticParameterRow(p, eq); }).join('')}</div>${!isProcessDept ? buildMonitoringSections(eq) : ''}</div>`;
+}
+
+function onActualInput(input) { updateCounts(); }
+
+async function submitMonitoringLogs() {
+  const monInputs = document.querySelectorAll('.mon-input:not([disabled])');
+  if (!monInputs.length) return;
+  const byMon = {};
+  monInputs.forEach(inp => {
+    const monId = inp.dataset.monId;
+    if (!byMon[monId]) byMon[monId] = { monId, eqId: inp.dataset.eqId, dept: inp.dataset.eqDept, readings: [] };
+    byMon[monId].readings.push({ label: inp.dataset.colLabel, value: inp.value ? parseFloat(inp.value) : null });
+  });
+  document.querySelectorAll('.mon-remarks:not([disabled])').forEach(ta => {
+    const monId = ta.dataset.monId;
+    if (byMon[monId]) byMon[monId].remarks = ta.value.trim() || null;
+  });
+  for (const mon of Object.values(byMon)) {
+    if (mon.readings.every(r => r.value == null)) continue;
+    try {
+      await api('/eq-monitoring/log', { method: 'POST', body: JSON.stringify({ monitoring_id: parseInt(mon.monId), equipment_id: parseInt(mon.eqId), plant: currentPlant, department: mon.dept, shift: currentShift, readings: mon.readings, remarks: mon.remarks }) });
+      submittedMonitoringMap[mon.monId] = true;
+      document.querySelectorAll(`.mon-input[data-mon-id="${mon.monId}"]`).forEach(el => el.disabled = true);
+      const remEl = document.getElementById(`mon_remarks_${mon.monId}`);
+      if (remEl) remEl.disabled = true;
+    } catch(e) { if (!e.message.includes('already submitted')) console.warn('Monitoring log submit failed:', mon.monId, e.message); }
+  }
+}
+
+function updateCounts() {
+  let filled = 0, total = 0, deviations = 0;
+  document.querySelectorAll('.actual-input:not([disabled])').forEach(input => { total++; if (input.value.trim()) { filled++; if (input.classList.contains('deviation')) deviations++; } });
+  document.querySelectorAll('.mon-input:not([disabled])').forEach(input => { total++; if (input.value.trim()) filled++; });
+  document.querySelectorAll('.dynamic-value-input:not([disabled])').forEach(input => { total++; if (input.value.trim()) filled++; });
+  document.getElementById('filledCount').textContent = filled;
+  document.getElementById('totalCount').textContent = total;
+  document.getElementById('deviationCount').textContent = `${deviations} deviation${deviations !== 1 ? 's' : ''}`;
+  const isProcessDept = user && user.department && user.department.toLowerCase() === 'process';
+  const submitBar = document.getElementById('submitBar');
+  if (submitBar) {
+    if (isProcessDept) { submitBar.style.display = total > 0 ? 'flex' : 'none'; }
+    else { submitBar.style.display = (total > 0 && !submittedToday) ? 'flex' : 'none'; }
+  }
+  const devWrapper = document.getElementById('deviationWrapper');
+  if (devWrapper) { const isProc = user && user.department && user.department.toLowerCase().includes('process'); devWrapper.style.display = isProc ? 'none' : 'inline'; }
+}
+
+function renderHourlyCard(eq) { return `<div class="param-card"><div class="param-card-header"><strong>${eq.name} (${eq.code})</strong><span>Hourly Entry Mode</span></div></div>`; }
+
+async function submitAllmonitoring() {	
+  let hasError = false;
+  document.querySelectorAll('.actual-input.deviation').forEach(input => { 
+    if (!input.dataset.std) return; 
+    const paramId = input.dataset.paramId; 
+    const remarksEl = document.getElementById(`remarks_${paramId}`); 
+    if (remarksEl && !remarksEl.value.trim()) { 
+      remarksEl.classList.add('required'); 
+      remarksEl.focus(); 
+      hasError = true; 
+    } 
+  });
+
+  console.log("STATIC INPUT PROCESSING DONE");
+  if (hasError) { 
+    showToast('Please add remarks for all deviations!', 'error'); 
+    return; 
+  }
+  
+  const btn = document.getElementById('submitBtn');
+  if (btn) { 
+    btn.disabled = true; 
+    btn.textContent = 'Submitting...'; 
+  }
+  
+  try {
+    const byEquipment = {};
+    
+    // Process regular static inputs
+document.querySelectorAll('.actual-input').forEach(input => {
+
+  // Skip zone inputs because they are submitted separately
+  if (input.classList.contains('zone-value-input')) return;
+
+  // Skip dynamic inputs because they are submitted separately
+  if (input.classList.contains('dynamic-value-input')) return;
+
+  if (!input.value.trim()) return;
+
+  const eqId = input.dataset.eqId;
+  const eqDept = input.dataset.eqDept;
+  const hour = parseInt(input.dataset.hour) || 0;
+
+  const key = hour > 0 ? `${eqId}_h${hour}` : eqId;
+
+  if (!byEquipment[key]) {
+      byEquipment[key] = {
+         eqId,
+         eqDept,
+         hour,
+         entries: []
+      };
+  }
+
+  const paramId = input.dataset.paramId;
+  const std = input.dataset.std;
+  const actual = input.value.trim();
+
+  const remarks =
+      document.getElementById(`remarks_${paramId}`)?.value.trim() || '';
+
+  byEquipment[key].entries.push({
+      parameter_id: parseInt(paramId),
+      standard_value_snapshot: std || null,
+      actual_value: actual,
+      remarks: remarks || null
+  });
+
+});
+    
+    // Submit regular equipment entries
+    for (const eq of Object.values(byEquipment)) { 
+      if (!eq.entries.length) continue; 
+      await api('/shift-monitoring/log', { 
+        method: 'POST', 
+        body: JSON.stringify({ 
+          plant: currentPlant, 
+          department: eq.eqDept, 
+          shift: currentShift, 
+          equipment_id: parseInt(eq.eqId), 
+          hour_number: eq.hour > 0 ? eq.hour : null, 
+          entries: eq.entries 
+        }) 
+      }); 
+    }
+    
+    // Process department dynamic rows submission
+    const dynamicInputs = document.querySelectorAll('.dynamic-value-input');
+    console.log(`Found ${dynamicInputs.length} dynamic inputs`);
+    
+    for (const input of dynamicInputs) {
+      const value = input.value.trim();
+      if (!value) continue;
+
+      const paramId = input.dataset.paramId;
+      const paramIdNum = parseInt(paramId);
+      const rowIdx = input.dataset.rowIdx;
+      const equipmentId = input.dataset.eqId;
+      const eqDept = input.dataset.eqDept || 'Process';
+      const remarksEl = document.getElementById(`dynamic_remarks_${paramId}_row${rowIdx}`);
+      const remarks = remarksEl ? remarksEl.value.trim() : null;
+
+      const requestBody = {
+        plant: currentPlant,
+        department: eqDept,
+        shift: currentShift,
+        equipment_id: parseInt(equipmentId),
+        hour_number: null,
+        entries: [{
+          parameter_id: paramIdNum,
+          standard_value_snapshot: null,
+          actual_value: value,
+          remarks: remarks
+        }]
+      };
+
+      await api('/shift-monitoring/log', {
+        method: 'POST',
+        body: JSON.stringify(requestBody)
+      });
+    }
+
+    // Process zone temperature rows (KILN)
+    console.log("ENTERING ZONE SECTION");
+    const zoneInputs = document.querySelectorAll('.zone-value-input');
+    console.log(`Found ${zoneInputs.length} zone inputs`);
+
+    zoneInputs.forEach(x => {
+
+   console.log(
+      "ZONE:",
+      x.dataset.zoneLabel,
+      "ROW:",
+      x.dataset.rowIdx,
+      "VALUE:",
+      x.value
+   );
+
+});   
+	
+    
+    if (zoneInputs.length > 0) {
+     
+      
+      const zoneByRow = {};
+      zoneInputs.forEach(input => {
+        const value = input.value.trim();
+        if (!value) return;
+        
+        const paramId = input.dataset.paramId;
+        const rowIdx = input.dataset.rowIdx;
+        const zoneLabel = input.dataset.zoneLabel;
+        const eqId = input.dataset.eqId;
+
+	const eqDept = input.dataset.eqDept;
+
+	const key =
+        `${eqId}_${paramId}_${rowIdx}`;
+     
+        if (!zoneByRow[key]) {
+
+   zoneByRow[key] = {
+
+      eqId,
+
+      eqDept,
+
+      paramId,
+
+      rowIdx,
+
+      zoneValues: [],
+
+      remarks: null
+
+   };
+
+}
+
+console.log(
+   "GROUP KEY:",
+   key,
+   "ZONE:",
+   zoneLabel,
+   "VALUE:",
+   value
+);
+
+
+     zoneByRow[key].zoneValues.push({
+
+      zoneIdx: parseInt(input.dataset.zoneIdx),
+      zoneLabel: input.dataset.zoneLabel,
+      value: value
+
+   });
+
+});   // closes input loop
+   
+      Object.keys(zoneByRow).forEach(key => {
+        const z = zoneByRow[key];
+        const remarksEl = document.getElementById(`zone_remarks_${z.paramId}_row${z.rowIdx}`);
+        z.remarks = remarksEl ? remarksEl.value.trim() : null;
+      });
+      
+      for (const row of Object.values(zoneByRow)) {
+        if (!row.zoneValues.length) continue;
+        
+        const entries = row.zoneValues.map(z => ({
+
+    parameter_id: parseInt(row.paramId),
+
+    zone_no: z.zoneIdx,
+
+    zone_label: z.zoneLabel,
+
+    standard_value_snapshot: null,
+
+    actual_value: z.value,
+
+    remarks: row.remarks || null
+
+}));
+        
+        const requestBody = {
+
+   	plant: currentPlant,
+
+   	department: row.eqDept,
+
+   	shift: currentShift,
+
+   	equipment_id:
+        parseInt(row.eqId),
+
+    	hour_number: null,
+
+   	entries: entries
+
+};
+
+console.log(
+   "REQUEST BODY",
+   JSON.stringify(
+      requestBody,
+      null,
+      2
+   )
+);
+
+console.log(
+   "ZONE VALUES",
+   JSON.stringify(row.zoneValues, null, 2)
+);
+
+        console.log('Submitting zone row:', requestBody);
+        
+        await api('/shift-monitoring/log', {
+          method: 'POST',
+          body: JSON.stringify(requestBody)
+        });
+        console.log('✅ Zone row submitted successfully');
+        
+        const container = document.getElementById(`dynamic_rows_container_${row.paramId}`);
+        if (container) {
+          const targetRow = container.querySelector(`.zone-values-row[data-row-idx="${row.rowIdx}"]`);
+          if (targetRow) {
+            targetRow.querySelectorAll('.zone-value-input').forEach(input => {
+              if (input.value && input.value.trim() !== '') {
+                input.disabled = true;
+                input.style.background = '#f0fdf4';
+                input.style.color = '#166534';
+              }
+            });
+            const remarksArea = targetRow.querySelector('.remarks-input');
+            if (remarksArea && remarksArea.value && remarksArea.value.trim() !== '') {
+              remarksArea.disabled = true;
+              remarksArea.style.background = '#f0fdf4';
+            }
+          }
+        }
+      }
+    }
+
+    // Submit monitoring logs
+    await submitMonitoringLogs();
+    
+    showToast(`✅ Monitoring submitted successfully for Shift ${currentShift}!`, 'success');
+    
+    // Disable submitted inputs
+    Object.values(byEquipment).forEach(eq => { 
+      if (eq.hour > 0) { 
+        if (!submittedHoursMap[eq.eqId]) submittedHoursMap[eq.eqId] = []; 
+        if (!submittedHoursMap[eq.eqId].includes(eq.hour)) { 
+          submittedHoursMap[eq.eqId].push(eq.hour); 
+        } 
+        document.querySelectorAll(`.actual-input[data-eq-id="${eq.eqId}"][data-hour="${eq.hour}"]`).forEach(el => { 
+          el.disabled = true; 
+          el.style.background = '#f0fdf4'; 
+          el.style.color = '#166534'; 
+        }); 
+      } else { 
+        document.querySelectorAll(`.actual-input[data-eq-id="${eq.eqId}"], .remarks-input`).forEach(el => el.disabled = true); 
+      } 
+    });
+    
+  } catch(e) { 
+    showToast(e.message || 'Submission failed', 'error'); 
+    console.error('Submission error:', e);
+  } finally { 
+    if (btn) { 
+      btn.disabled = false; 
+      btn.textContent = '✅ Submit Monitoring Entries'; 
+    } 
+  }
+}
+function goBack() { window.location.href = 'shift-log.html'; }
+function logout() { clearSession(); window.location.href = '../login.html'; }
+function filterMonitoring(query) { }
+
+init();
+</script>
+</body>
+</html>

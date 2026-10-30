@@ -1,0 +1,4 @@
+<?php
+namespace App\Models;
+use Illuminate\Database\Eloquent\Model; use Illuminate\Database\Eloquent\Relations\HasMany;
+class Equipment extends Model { protected $guarded=[]; public $timestamps=false; protected function casts():array{return ['active'=>'boolean','hourly_entry'=>'boolean','load_monitoring'=>'boolean','kw_capacity'=>'decimal:2','load_100pct'=>'decimal:2','critical_load'=>'decimal:2','created_at'=>'datetime','updated_at'=>'datetime'];} public function shiftLogs():HasMany{return $this->hasMany(ShiftLog::class);} public function breakdowns():HasMany{return $this->hasMany(Breakdown::class);} public function jobs():HasMany{return $this->hasMany(Job::class);} public function monitoringParams():HasMany{return $this->hasMany(EquipmentMonitoringParam::class);} public function monitoringTypes():HasMany{return $this->hasMany(EquipmentMonitoringType::class);} }

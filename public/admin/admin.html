@@ -1,0 +1,2243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CMMS — Admin</title>
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+  .tab-bar { display: flex; gap: .25rem; border-bottom: 2px solid var(--border); margin-bottom: 1.5rem; }
+  .tab-btn {
+    padding: .6rem 1.25rem; background: none; border: none; cursor: pointer;
+    font-size: .9rem; font-weight: 600; color: var(--text-sm);
+    border-bottom: 3px solid transparent; margin-bottom: -2px; transition: all .15s;
+  }
+  .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+  
+ /* ── CSV Export button style ─────────────────────────────────── */
+  .btn-csv {
+    padding: .32rem .85rem;
+    background: #0369a1;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: .78rem;
+    font-weight: 600;
+  }
+  .btn-csv:hover { background: #0284c7; }
+
+
+  /* ── Dynamic Row Styles for Shift Monitoring Parameters ────────────────── */
+  .dynamic-param-row {
+    border: 2px dashed #fcd34d;
+    background: #fffbeb;
+  }
+  .dynamic-badge {
+    background: #f59e0b;
+    color: white;
+    font-size: 0.65rem;
+    padding: 0.2rem 0.5rem;
+    border-radius: 12px;
+    margin-left: 0.5rem;
+  }
+  .user-add-box-btn {
+    background: #fef3c7;
+    border: 1px solid #fcd34d;
+    color: #92400e;
+    padding: 0.3rem 0.7rem;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+  .user-add-box-btn:hover {
+    background: #fde68a;
+  }
+  .dynamic-boxes-container {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid #fef3c7;
+  }
+  .dynamic-box {
+    background: #fefce8;
+    border: 1px solid #fde68a;
+    border-radius: 6px;
+    padding: 0.4rem 0.6rem;
+    margin-bottom: 0.4rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .dynamic-box input {
+    flex: 1;
+    padding: 0.3rem 0.5rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    font-size: 0.8rem;
+  }
+  .dynamic-box .remove-box {
+    background: #fee2e2;
+    color: #991b1b;
+    border: none;
+    border-radius: 4px;
+    padding: 0.2rem 0.5rem;
+    cursor: pointer;
+    font-size: 0.7rem;
+  }
+  .param-columns-config {
+    background: #f8fafc;
+    border-radius: 8px;
+    padding: 0.75rem;
+    margin-top: 0.5rem;
+    border: 1px solid #e2e8f0;
+  }
+  .param-columns-config label {
+    font-size: 0.75rem;
+    color: #64748b;
+    font-weight: 600;
+    display: block;
+    margin-bottom: 0.3rem;
+  }
+  .param-columns-input {
+    width: 100%;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 0.8rem;
+  }
+  .param-columns-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+  }
+  .param-column-tag {
+    background: #e0e7ff;
+    color: #1e40af;
+    padding: 0.2rem 0.6rem;
+    border-radius: 16px;
+    font-size: 0.75rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+  .param-column-tag button {
+    background: none;
+    border: none;
+    color: #1e40af;
+    cursor: pointer;
+    font-size: 0.7rem;
+    font-weight: bold;
+  }
+
+ .param-column-tag button {
+    background: none;
+    border: none;
+    color: #1e40af;
+    cursor: pointer;
+    font-size: 0.7rem;
+    font-weight: bold;
+  }
+
+  /* Horizontal zone boxes styling */
+  .horizontal-box input {
+    text-align: center;
+    font-weight: 600;
+    color: #1e40af;
+  }
+  .horizontal-box:hover {
+    background: #e0f2fe;
+    border-color: #7dd3fc;
+  }
+
+</style>
+</head>
+<body>
+
+<header class="cmms-header">
+  <div class="logo">⚙️ Plant CMMS <span>Admin Panel</span></div>
+  <div style="display:flex;align-items:center;gap:.75rem">
+    <div class="user-info" id="headerUser"></div>
+    <button class="btn-logout" onclick="logout()">Logout</button>
+  </div>
+</header>
+
+<div class="page">
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('equipment')">🏗️ Equipment</button>
+    <button class="tab-btn" onclick="switchTab('users')">👥 Users</button>
+    <button class="tab-btn" onclick="switchTab('stopreasons')">📋 Stop Reasons</button>
+    <button class="tab-btn" onclick="switchTab('unlocks')">🔓 Unlock Requests</button>
+    <button class="tab-btn" onclick="switchTab('audit')">🔍 Audit Log</button>
+
+    <button class="tab-btn" onclick="switchTab('masters')">🗂️ Masters</button>
+  </div>
+
+  <!-- EQUIPMENT TAB -->
+  <div class="tab-panel active" id="tab-equipment">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:.5rem">
+      <div class="page-title" style="margin:0">Equipment Master</div>
+      <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+        <div style="position:relative">
+          <span style="position:absolute;left:.65rem;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:.9rem">🔍</span>
+          <input type="text" id="eqSearch" placeholder="Search equipment..." oninput="filterEqTable()"
+            style="padding:.45rem .75rem .45rem 2rem;border:2px solid #e2e8f0;border-radius:8px;
+                   font-size:.85rem;font-family:inherit;width:200px;transition:border .15s"
+            onfocus="this.style.borderColor='#1e40af'" onblur="this.style.borderColor='#e2e8f0'">
+        </div>
+        <select id="eqFilterPlant" onchange="filterEqTable()"
+          style="padding:.45rem .65rem;border:2px solid #e2e8f0;border-radius:8px;font-size:.85rem;font-family:inherit">
+          <option value="">All Plants</option>
+          <option value="100TPD">100 TPD</option>
+          <option value="225TPD">225 TPD</option>
+        </select>
+        <select id="eqFilterDept" onchange="filterEqTable()"
+          style="padding:.45rem .65rem;border:2px solid #e2e8f0;border-radius:8px;font-size:.85rem;font-family:inherit">
+          <option value="">All Departments</option>
+        </select>
+        <button class="btn btn-primary" onclick="openEqModal()">+ Add Equipment</button>
+        <button onclick="exportEquipmentExcel()"
+          style="padding:.45rem .9rem;background:#166534;color:#fff;border:none;border-radius:8px;
+                 font-size:.85rem;font-weight:600;cursor:pointer;font-family:inherit">
+          📥 Export Excel
+        </button>
+        <button onclick="openBulkCopyModal()"
+          style="padding:.45rem .9rem;background:#7c3aed;color:#fff;border:none;border-radius:8px;
+                 font-size:.85rem;font-weight:600;cursor:pointer;font-family:inherit">
+          📋 Bulk Copy to Plant
+        </button>
+      </div>
+    </div>
+    <div id="eqTable"><div class="loading">Loading...</div></div>
+  </div>
+
+  <!-- Bulk Copy Modal -->
+  <div class="modal-overlay" id="bulkCopyModal">
+    <div class="modal" style="max-width:520px">
+      <div class="modal-header">
+        <div class="modal-title">📋 Bulk Copy Equipment to Another Plant</div>
+        <button class="modal-close" onclick="closeModal('bulkCopyModal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:.85rem;margin-bottom:1rem">
+          <p style="margin:0;font-size:.85rem;color:#0369a1">
+            This will copy all equipment from the selected <strong>Source Plant + Department</strong>
+            to the <strong>Target Plant</strong>. Equipment codes will get a suffix automatically.
+            Monitoring types will be copied too.
+          </p>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:.75rem">
+          <div class="form-group" style="margin:0">
+            <label class="form-label">Source Plant *</label>
+            <select class="form-control" id="bcSourcePlant">
+              <option value="100TPD">100 TPD</option>
+              <option value="225TPD">225 TPD</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin:0">
+            <label class="form-label">Target Plant *</label>
+            <select class="form-control" id="bcTargetPlant">
+              <option value="225TPD">225 TPD</option>
+              <option value="100TPD">100 TPD</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:.75rem">
+          <div class="form-group" style="margin:0">
+            <label class="form-label">Department *</label>
+            <select class="form-control" id="bcDept">
+              <option value="">— Select —</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin:0">
+            <label class="form-label">Code Suffix</label>
+            <input class="form-control" id="bcSuffix" value="-225" placeholder="e.g. -225">
+            <p style="font-size:.72rem;color:#64748b;margin:.3rem 0 0">Added to each equipment code</p>
+          </div>
+        </div>
+        <div id="bcPreview" style="display:none;margin-top:.75rem">
+          <div style="font-weight:700;font-size:.85rem;color:#1e40af;margin-bottom:.5rem"
+               id="bcPreviewTitle"></div>
+          <div style="max-height:200px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px">
+            <table style="width:100%;border-collapse:collapse;font-size:.82rem">
+              <thead><tr style="background:#f8fafc">
+                <th style="padding:.35rem .6rem;text-align:left">Original Code</th>
+                <th style="padding:.35rem .6rem;text-align:left">New Code</th>
+                <th style="padding:.35rem .6rem;text-align:left">Name</th>
+              </tr></thead>
+              <tbody id="bcPreviewRows"></tbody>
+            </table>
+          </div>
+        </div>
+        <div id="bcProgress" style="display:none;margin-top:.75rem">
+          <div style="background:#f1f5f9;border-radius:8px;height:12px;overflow:hidden">
+            <div id="bcProgressBar" style="background:#2563eb;height:100%;width:0%;transition:width .3s"></div>
+          </div>
+          <div id="bcProgressText" style="font-size:.82rem;color:#64748b;margin-top:.4rem;text-align:center"></div>
+        </div>
+      </div>
+      <div class="modal-footer" style="gap:.5rem">
+        <button class="btn btn-outline" onclick="closeModal('bulkCopyModal')">Cancel</button>
+        <button class="btn btn-outline" onclick="previewBulkCopy()"
+          style="background:#eff6ff;border-color:#93c5fd;color:#1e40af">
+          👁 Preview
+        </button>
+        <button class="btn btn-primary" id="bcExecuteBtn" onclick="executeBulkCopy()" disabled
+          style="background:#7c3aed;border-color:#7c3aed">
+          📋 Copy All
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- USERS TAB -->
+  <div class="tab-panel" id="tab-users">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+      <div class="page-title" style="margin:0">User Management</div>
+      <button class="btn btn-primary" onclick="openUserModal()">+ Add User</button>
+    </div>
+    <div id="userTable"><div class="loading">Loading...</div></div>
+  </div>
+
+  <!-- STOP REASONS TAB -->
+  <div class="tab-panel" id="tab-stopreasons">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+      <div class="page-title" style="margin:0">Stop Reason Master</div>
+      <button class="btn btn-primary" onclick="openSrModal()">+ Add Reason</button>
+    </div>
+    <div id="srTable"><div class="loading">Loading...</div></div>
+  </div>
+
+  <!-- UNLOCK REQUESTS TAB -->
+  <div class="tab-panel" id="tab-unlocks">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+      <div class="page-title" style="margin:0">🔓 General Shift Monitoring — Unlock Control</div>
+      <button class="btn btn-outline btn-sm" onclick="loadUnlockRequests()">🔄 Refresh</button>
+    </div>
+    <div style="background:#fefce8;border:1px solid #fde68a;border-radius:8px;
+                padding:.75rem 1rem;margin-bottom:1rem;font-size:.85rem;color:#92400e">
+      ⚠️ These monitoring types are marked <strong>General Shift Only (9AM–6PM)</strong>.
+      Non-general shift operators cannot submit without admin unlock.
+      Unlock when required and re-lock when done.
+    </div>
+    <div id="unlockTable"><div class="loading">Loading...</div></div>
+  </div>
+
+ <!-- AUDIT TAB -->
+  <div class="tab-panel" id="tab-audit">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:.5rem">
+      <div class="page-title" style="margin:0">Audit Log</div>
+      <div style="display:flex;gap:.5rem">
+        <button class="btn-csv" onclick="exportAuditCSV()" style="padding:.32rem .85rem;background:#0369a1;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:.78rem;font-weight:600;">📥 Export CSV</button>
+        <button class="btn btn-outline btn-sm" onclick="loadAudit()">🔄 Refresh</button>
+      </div>
+    </div>
+    <div id="auditTable"><div class="loading">Loading...</div></div>
+  </div>  	
+
+  <!-- Masters Tab -->
+  <div class="tab-panel" id="tab-masters">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.5rem">
+
+      <!-- Plants -->
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+          <strong style="font-size:1rem">🏭 Plants</strong>
+          <button class="btn btn-primary btn-sm" onclick="openMasterModal('plant')">+ Add</button>
+        </div>
+        <div id="plantsList"><div class="loading">Loading...</div></div>
+      </div>
+
+      <!-- Departments -->
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+          <strong style="font-size:1rem">🏢 Departments</strong>
+          <button class="btn btn-primary btn-sm" onclick="openMasterModal('department')">+ Add</button>
+        </div>
+        <div id="deptsList"><div class="loading">Loading...</div></div>
+      </div>
+
+      <!-- Shifts -->
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+          <strong style="font-size:1rem">🔄 Shifts</strong>
+          <button class="btn btn-primary btn-sm" onclick="openMasterModal('shift')">+ Add</button>
+        </div>
+        <div id="shiftsList"><div class="loading">Loading...</div></div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- Equipment Modal -->
+<div class="modal-overlay" id="eqModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="eqModalTitle">Add Equipment</div>
+      <button class="modal-close" onclick="closeModal('eqModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="eqId">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+        <div class="form-group"><label class="form-label">Equipment Code *</label><input class="form-control" id="eqCode" placeholder="e.g. SIK-03"></div>
+        <div class="form-group"><label class="form-label">Name *</label><input class="form-control" id="eqName" placeholder="Rotary Kiln #3"></div>
+        <div class="form-group"><label class="form-label">Department *</label>
+          <select class="form-control" id="eqDept" onchange="onEqDeptChange()">
+            <option value="">—Select—</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Type</label><input class="form-control" id="eqType" placeholder="Kiln, Conveyor, etc."></div>
+        <div class="form-group"><label class="form-label">Location</label><input class="form-control" id="eqLocation" placeholder="Kiln Section"></div>
+        <div class="form-group"><label class="form-label">Plant *</label>
+          <select class="form-control" id="eqPlant">
+            <option value="">—Select—</option>
+          </select>
+        </div>
+      </div>
+      <!-- Parameters Section -->
+      <!-- Hourly Entry toggle — shown only when Dept = Process -->
+      <div id="hourlyEntryGroup" style="margin-top:1rem;padding:.75rem;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;display:none">
+        <label style="display:flex;align-items:center;gap:.75rem;cursor:pointer;font-weight:600;font-size:.9rem">
+          <input type="checkbox" id="eqHourlyEntry" style="width:16px;height:16px;cursor:pointer">
+          <span>⏱ Hourly Entry (Process Dept)</span>
+        </label>
+        <p style="font-size:.75rem;color:#0369a1;margin:.3rem 0 0 1.75rem">
+          When enabled, Shift-in-Charge logs readings for Hour 1 to Hour 8 separately instead of one entry per shift.
+        </p>
+      </div>
+
+      <!-- Generic Monitoring Section — any dept, admin defined -->
+      <div style="margin-top:1rem;border-top:1px solid #e2e8f0;padding-top:1rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
+          <label class="form-label" style="margin:0;font-weight:700">📡 Monitoring Types</label>
+          <button type="button" class="btn btn-outline btn-sm" onclick="addMonitoringRow()">+ Add Monitoring</button>
+        </div>
+        <div id="eqMonitoringRows">
+          <!-- Monitoring rows added dynamically -->
+        </div>
+        <p style="font-size:.75rem;color:#94a3b8;margin-top:.3rem">
+          Add monitoring types per equipment. Only <strong>Monitoring Name</strong> is required.
+          Column Labels are optional — if left blank, a single <em>Value</em> column will be used.
+        </p>
+      </div>
+
+      <!-- Shift Monitoring Parameters Section -->
+       <div style="margin-top:1rem;border-top:1px solid #e2e8f0;padding-top:1rem" id="shiftParamsSection">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
+          <label class="form-label" style="margin:0;font-weight:700">📋 Shift Monitoring Parameters</label>
+          <div style="display:flex;gap:.5rem">
+            <button type="button" class="btn btn-outline btn-sm" onclick="addParamRow()">+ Add Parameter</button>
+            <button type="button" class="btn btn-outline btn-sm" onclick="addDynamicRowConfig()" 
+              style="background:#fef3c7;border-color:#fcd34d;color:#92400e">
+              ⚡ Add Dynamic Row (User-Expandable)
+            </button>
+          </div>
+        </div>
+        <div style="font-size:.75rem;color:#64748b;margin-bottom:.6rem">
+          <strong>Static Parameters:</strong> Fixed boxes for operators.<br>
+          <strong>Dynamic Parameters:</strong> Operators can add extra boxes as needed.
+        </div>
+        <div id="eqParamRows">
+          <!-- Parameter rows added dynamically -->
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('eqModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEquipment()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- User Modal -->
+<div class="modal-overlay" id="userModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="userModalTitle">Add User</div>
+      <button class="modal-close" onclick="closeModal('userModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="userId">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+        <div class="form-group"><label class="form-label">Username *</label><input class="form-control" id="uUsername" placeholder="john.doe"></div>
+        <div class="form-group"><label class="form-label">Password *</label><input class="form-control" id="uPassword" type="password" placeholder="Min 6 chars"></div>
+        <div class="form-group" style="grid-column:1/-1"><label class="form-label">Full Name *</label><input class="form-control" id="uFullName" placeholder="John Doe"></div>
+        <div class="form-group"><label class="form-label">Role *</label>
+          <select class="form-control" id="uRole" onchange="onRoleChange()">
+            <option value="">—Select Role—</option>
+            <option value="operator">Shift Incharge</option>
+            <option value="maintenance">HOD</option>
+            <option value="management">Management</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+
+        <div class="form-group" id="uDeptGroup" style="grid-column:1/-1;display:none">
+          <label class="form-label">Department *</label>
+          <select class="form-control" id="uDept">
+            <option value="">— Select Department —</option>
+          </select>
+        </div>
+        <div class="form-group" id="uPlantGroup" style="grid-column:1/-1">
+          <label class="form-label">Plant *</label>
+          <!-- Shown for operator/maintenance: checkboxes -->
+          <div id="uPlantCheckboxes" style="display:flex;gap:1.5rem;margin-top:.4rem">
+            <label style="display:flex;align-items:center;gap:.5rem;font-weight:600;cursor:pointer">
+              <input type="checkbox" id="uPlant100" value="100TPD" style="width:16px;height:16px;cursor:pointer"> 100 TPD
+            </label>
+            <label style="display:flex;align-items:center;gap:.5rem;font-weight:600;cursor:pointer">
+              <input type="checkbox" id="uPlant225" value="225TPD" style="width:16px;height:16px;cursor:pointer"> 225 TPD
+            </label>
+          </div>
+          <!-- Shown for management/admin: single select (hidden by default) -->
+          <select class="form-control" id="uPlantSelect" style="display:none">
+            <option value="">— Select Plant —</option>
+            <option value="100TPD">100 TPD</option>
+            <option value="225TPD">225 TPD</option>
+            <option value="BOTH">Both Plants</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('userModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveUser()">Save User</button>
+    </div>
+  </div>
+</div>
+
+<!-- Stop Reason Modal -->
+<div class="modal-overlay" id="srModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Add Stop Reason</div>
+      <button class="modal-close" onclick="closeModal('srModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Code * (e.g. MECH-BRG)</label><input class="form-control" id="srCode"></div>
+      <div class="form-group"><label class="form-label">Description *</label><input class="form-control" id="srDesc" placeholder="Bearing Failure"></div>
+      <div class="form-group"><label class="form-label">Category</label>
+        <select class="form-control" id="srCat">
+          <option>Mechanical</option><option>Electrical</option><option>Process</option>
+          <option>Utility</option><option>Planned</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('srModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveSr()">Save</button>
+    </div>
+  </div>
+</div>
+
+
+
+<!-- Master Modal -->
+<div class="modal-overlay" id="masterModal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <div class="modal-title" id="masterModalTitle">Add</div>
+      <button class="modal-close" onclick="closeMasterModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="masterId">
+      <input type="hidden" id="masterType">
+      <div class="form-group" id="masterPlantGroup" style="display:none">
+        <label class="form-label">Plant *</label>
+        <select class="form-control" id="masterPlantId"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label" id="masterNameLabel">Name *</label>
+        <input class="form-control" id="masterName" placeholder="Enter name">
+      </div>
+      <div class="form-group" id="masterCodeGroup">
+        <label class="form-label" id="masterCodeLabel">Code *</label>
+        <input class="form-control" id="masterCode" placeholder="e.g. 100TPD">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeMasterModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveMaster()">💾 Save</button>
+    </div>
+  </div>
+</div>
+
+
+
+
+<script src="../shared/cmms.js"></script>
+<script>
+let user;
+
+async function init() {
+  user = requireAuth(['admin']);
+  if (!user) return;
+  document.getElementById('headerUser').innerHTML = `<strong>${user.full_name}</strong>Admin`;
+  await loadEquipment();
+}
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab-panel').forEach(p => { p.classList.remove('active'); p.style.display = 'none'; });
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  const panel = document.getElementById('tab-' + tab);
+  if (panel) { panel.classList.add('active'); panel.style.display = 'block'; }
+  // Mark the correct tab button active (works both from click and programmatic call)
+  const activeBtn = document.querySelector(`.tab-btn[onclick*="'${tab}'"]`);
+  if (activeBtn) activeBtn.classList.add('active');
+  if (tab === 'equipment') loadEquipment();
+  if (tab === 'unlocks')   loadUnlockRequests();
+  else if (tab === 'users') loadUsers();
+  else if (tab === 'stopreasons') loadSr();
+  else if (tab === 'audit') loadAudit();
+
+  else if (tab === 'masters') setTimeout(loadMastersTab, 50);
+}
+
+// ── EQUIPMENT ──────────────────────────────────────────────
+let allAdminEquipment = [];
+
+async function loadEquipment() {
+  try {
+    const data = await api('/equipment');
+    allAdminEquipment = data.data;
+    renderAdminEqTable(allAdminEquipment);
+    populateEqDeptFilter();
+  } catch(e) { document.getElementById('eqTable').innerHTML = '<p>Error loading</p>'; }
+}
+
+function filterEqTable() {
+  const q     = (document.getElementById('eqSearch').value || '').toLowerCase().trim();
+  const plant = document.getElementById('eqFilterPlant')?.value || '';
+  const dept  = document.getElementById('eqFilterDept')?.value  || '';
+
+  const filtered = allAdminEquipment.filter(e => {
+    const matchQ    = !q || (e.code||'').toLowerCase().includes(q) ||
+                      (e.name||'').toLowerCase().includes(q) ||
+                      (e.department||'').toLowerCase().includes(q) ||
+                      (e.location||'').toLowerCase().includes(q) ||
+                      (e.type||'').toLowerCase().includes(q);
+    const matchPlant = !plant || (e.plant||'') === plant;
+    const matchDept  = !dept  || (e.department||'') === dept;
+    return matchQ && matchPlant && matchDept;
+  });
+  renderAdminEqTable(filtered);
+}
+
+function populateEqDeptFilter() {
+  const depts = [...new Set((allAdminEquipment || []).map(e => e.department).filter(Boolean))].sort();
+  const sel   = document.getElementById('eqFilterDept');
+  if (!sel) return;
+  sel.innerHTML = '<option value="">All Departments</option>' +
+    depts.map(d => `<option value="${d}">${d}</option>`).join('');
+}
+
+function renderAdminEqTable(rows) {
+  if (!rows.length) {
+    document.getElementById('eqTable').innerHTML =
+      '<div style="padding:2rem;text-align:center;color:#64748b">No equipment found.</div>';
+    return;
+  }
+  let html = `<div class="table-wrap"><table><thead><tr>
+    <th>Code</th><th>Name</th><th>Department</th><th>Type</th><th>Location</th><th>Plant</th><th>Status</th><th>Actions</th>
+  </tr></thead><tbody>`;
+  rows.forEach(e => {
+    html += `<tr>
+      <td><strong>${e.code}</strong></td>
+      <td>${e.name}</td>
+      <td>${e.department}</td>
+      <td style="font-size:.82rem">${e.type || '—'}</td>
+      <td style="font-size:.82rem">${e.location || '—'}</td>
+      <td style="font-size:.82rem">${e.plant || '—'}</td>
+      <td><span class="badge badge-${e.current_status.toLowerCase()}">${e.current_status}</span></td>
+      <td style="display:flex;gap:.4rem">
+        <button class="btn btn-outline btn-sm" onclick="editEquipment(${e.id})">✏️ Edit</button>
+        <button class="btn btn-outline btn-sm" style="background:#f0fdf4;border-color:#86efac;color:#166534"
+          onclick="duplicateEquipment(${e.id})">⧉ Copy</button>
+        <button class="btn btn-sm" style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5" 
+          onclick="deleteEquipment(${e.id})">🗑️ Delete</button>
+      </td>
+    </tr>`;
+  });
+  html += '</tbody></table></div>';
+  document.getElementById('eqTable').innerHTML = html;
+}
+
+// ── BULK COPY EQUIPMENT ──────────────────────────────────────
+let bcEquipmentToCopy = [];
+
+function openBulkCopyModal() {
+  bcEquipmentToCopy = [];
+  document.getElementById('bcPreview').style.display   = 'none';
+  document.getElementById('bcProgress').style.display  = 'none';
+  document.getElementById('bcExecuteBtn').disabled     = true;
+
+  // Populate dept dropdown from loaded equipment
+  const depts = [...new Set((allAdminEquipment||[]).map(e => e.department).filter(Boolean))].sort();
+  const sel   = document.getElementById('bcDept');
+  sel.innerHTML = '<option value="">— Select —</option>' +
+    depts.map(d => `<option value="${d}">${d}</option>`).join('');
+
+  document.getElementById('bulkCopyModal').classList.add('open');
+}
+
+function previewBulkCopy() {
+  const sourcePlant = document.getElementById('bcSourcePlant').value;
+  const dept        = document.getElementById('bcDept').value;
+  const suffix      = document.getElementById('bcSuffix').value.trim();
+
+  if (!dept) { showToast('Please select a department', 'error'); return; }
+
+  // Filter equipment from source plant + dept
+  bcEquipmentToCopy = (allAdminEquipment || []).filter(e =>
+    e.plant === sourcePlant && e.department === dept
+  );
+
+  if (!bcEquipmentToCopy.length) {
+    showToast(`No equipment found for ${dept} in ${sourcePlant}`, 'error');
+    return;
+  }
+
+  // Build preview table
+  const rows = bcEquipmentToCopy.map(e => `
+    <tr style="border-bottom:1px solid #f1f5f9">
+      <td style="padding:.35rem .6rem;color:#64748b">${e.code}</td>
+      <td style="padding:.35rem .6rem;font-weight:600;color:#1e40af">${e.code}${suffix}</td>
+      <td style="padding:.35rem .6rem">${e.name}</td>
+    </tr>`).join('');
+
+  document.getElementById('bcPreviewRows').innerHTML = rows;
+  document.getElementById('bcPreviewTitle').textContent =
+    `${bcEquipmentToCopy.length} equipment will be copied from ${sourcePlant} ${dept} to ${document.getElementById('bcTargetPlant').value}`;
+  document.getElementById('bcPreview').style.display  = 'block';
+  document.getElementById('bcExecuteBtn').disabled    = false;
+}
+
+async function executeBulkCopy() {
+  const targetPlant = document.getElementById('bcTargetPlant').value;
+  const sourcePlant = document.getElementById('bcSourcePlant').value;
+  const suffix      = document.getElementById('bcSuffix').value.trim();
+
+  if (!bcEquipmentToCopy.length) { showToast('Please click Preview first', 'error'); return; }
+  if (sourcePlant === targetPlant) { showToast('Source and target plant cannot be the same', 'error'); return; }
+
+  // Confirm
+  if (!confirm(`Copy ${bcEquipmentToCopy.length} equipment to ${targetPlant}? This cannot be undone.`)) return;
+
+  document.getElementById('bcExecuteBtn').disabled   = true;
+  document.getElementById('bcProgress').style.display = 'block';
+  document.getElementById('bcPreview').style.display  = 'none';
+
+  let done = 0, failed = 0;
+  const total = bcEquipmentToCopy.length;
+
+  for (const eq of bcEquipmentToCopy) {
+    try {
+      // Create new equipment in target plant
+      const newEq = await api('/equipment', {
+        method: 'POST',
+        body: JSON.stringify({
+          code:         eq.code + suffix,
+          name:         eq.name,
+          department:   eq.department,
+          type:         eq.type         || '',
+          location:     eq.location     || '',
+          plant:        targetPlant,
+          hourly_entry: eq.hourly_entry || false,
+          kw_capacity:  eq.kw_capacity  || null,
+          load_100pct:  eq.load_100pct  || null,
+          critical_load: eq.critical_load || null,
+          load_monitoring: eq.load_monitoring || false,
+        })
+      });
+
+      // Copy monitoring types
+      try {
+        const mData = await api(`/eq-monitoring/equipment/${eq.id}`);
+        if (mData.data && mData.data.length) {
+          for (const m of mData.data) {
+            await api(`/eq-monitoring/equipment/${newEq.data.id}`, {
+              method: 'POST',
+              body: JSON.stringify({
+                monitoring_name:  m.monitoring_name,
+                unit:             m.unit,
+                reference_values: m.reference_values,
+                columns:          m.columns,
+                display_order:    m.display_order,
+              })
+            });
+          }
+        }
+      } catch(me) { console.warn('Monitoring copy failed for', eq.code, me.message); }
+
+      done++;
+    } catch(e) {
+      console.warn('Failed to copy', eq.code, e.message);
+      failed++;
+    }
+
+    // Update progress bar
+    const pct = Math.round(((done + failed) / total) * 100);
+    document.getElementById('bcProgressBar').style.width  = pct + '%';
+    document.getElementById('bcProgressText').textContent =
+      `Copying... ${done + failed} of ${total} (${failed > 0 ? failed + ' failed' : 'all OK'})`;
+  }
+
+  // Done
+  document.getElementById('bcProgressText').textContent =
+    `✅ Done! ${done} copied successfully${failed > 0 ? ', ' + failed + ' failed' : ''}.`;
+  document.getElementById('bcProgressBar').style.background = failed > 0 ? '#dc2626' : '#16a34a';
+
+  showToast(`✅ ${done} equipment copied to ${targetPlant}!`);
+  await loadEquipment();
+}
+
+// ── GENERAL SHIFT UNLOCK CONTROL ────────────────────────────
+async function loadUnlockRequests() {
+  const container = document.getElementById('unlockTable');
+  if (!container) return;
+  container.innerHTML = '<div class="loading">Loading...</div>';
+  try {
+    const data = await api('/eq-monitoring/locked');
+    const rows = data.data || [];
+    if (!rows.length) {
+      container.innerHTML = '<div style="padding:2rem;text-align:center;color:#64748b">No General Shift Only monitoring types configured yet.</div>';
+      return;
+    }
+
+    let html = `<div class="table-wrap"><table><thead><tr>
+      <th>Equipment</th><th>Plant</th><th>Department</th>
+      <th>Monitoring Type</th><th>Status</th><th>Unlocked By</th><th>Action</th>
+    </tr></thead><tbody>`;
+
+    rows.forEach(r => {
+      const isUnlocked = r.is_unlocked;
+      const statusBadge = isUnlocked
+        ? `<span style="background:#dcfce7;color:#166534;padding:.2rem .6rem;border-radius:20px;font-size:.78rem;font-weight:700">🔓 UNLOCKED</span>`
+        : `<span style="background:#fee2e2;color:#991b1b;padding:.2rem .6rem;border-radius:20px;font-size:.78rem;font-weight:700">🔒 LOCKED</span>`;
+      const unlockedBy = isUnlocked
+        ? `<span style="font-size:.8rem;color:#64748b">${r.unlocked_by_name||'—'}<br>
+           <span style="font-size:.72rem">${r.unlocked_at ? new Date(r.unlocked_at).toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : ''}</span></span>`
+        : '—';
+      const actionBtn = isUnlocked
+        ? `<button class="btn btn-sm" onclick="lockMonitoring(${r.id})"
+             style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;font-size:.78rem">
+             🔒 Re-lock
+           </button>`
+        : `<button class="btn btn-sm" onclick="unlockMonitoring(${r.id})"
+             style="background:#dcfce7;color:#166534;border:1px solid #86efac;font-size:.78rem">
+             🔓 Unlock
+           </button>`;
+
+      html += `<tr>
+        <td><strong>${r.equipment_name}</strong><br>
+            <span style="font-size:.78rem;color:#64748b">${r.equipment_code}</span></td>
+        <td style="font-size:.82rem">${r.plant}</td>
+        <td style="font-size:.82rem">${r.department}</td>
+        <td style="font-weight:600">${r.monitoring_name}</td>
+        <td>${statusBadge}</td>
+        <td>${unlockedBy}</td>
+        <td>${actionBtn}</td>
+      </tr>`;
+    });
+    html += '</tbody></table></div>';
+    container.innerHTML = html;
+  } catch(e) {
+    container.innerHTML = `<div style="padding:2rem;text-align:center;color:#dc2626">Error: ${e.message}</div>`;
+  }
+}
+
+async function unlockMonitoring(id) {
+  const note = prompt('Optional note for this unlock (e.g. reason):') || '';
+  try {
+    await api(`/eq-monitoring/${id}/unlock`, {
+      method: 'PATCH',
+      body: JSON.stringify({ unlock_note: note })
+    });
+    showToast('🔓 Monitoring unlocked successfully');
+    loadUnlockRequests();
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function lockMonitoring(id) {
+  if (!confirm('Re-lock this monitoring type? Operator will not be able to submit.')) return;
+  try {
+    await api(`/eq-monitoring/${id}/lock`, { method: 'PATCH' });
+    showToast('🔒 Monitoring re-locked');
+    loadUnlockRequests();
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+function exportEquipmentExcel() {
+  const plant = document.getElementById('eqFilterPlant')?.value || '';
+  const dept  = document.getElementById('eqFilterDept')?.value  || '';
+
+  // Get current filtered data
+  const q = (document.getElementById('eqSearch').value || '').toLowerCase().trim();
+  let rows = allAdminEquipment.filter(e => {
+    const matchQ     = !q || (e.code||'').toLowerCase().includes(q) ||
+                       (e.name||'').toLowerCase().includes(q);
+    const matchPlant = !plant || (e.plant||'') === plant;
+    const matchDept  = !dept  || (e.department||'') === dept;
+    return matchQ && matchPlant && matchDept;
+  });
+
+  if (!rows.length) { showToast('No equipment to export', 'error'); return; }
+
+  // Build filename
+  const plantLabel = plant || 'AllPlants';
+  const deptLabel  = dept  || 'AllDepts';
+  const dateStr    = new Date().toLocaleDateString('en-GB').replace(/\//g, '-');
+  const filename   = `Equipment_${plantLabel}_${deptLabel}_${dateStr}.csv`;
+
+  // Build CSV
+  const headers = ['Code','Name','Department','Type','Location','Plant','Hourly Entry','Status'];
+  const csvRows = [
+    headers.join(','),
+    ...rows.map(e => [
+      e.code        || '',
+      `"${(e.name||'').replace(/"/g,'""')}"`,
+      e.department  || '',
+      `"${(e.type||'').replace(/"/g,'""')}"`,
+      `"${(e.location||'').replace(/"/g,'""')}"`,
+      e.plant       || '',
+      e.hourly_entry ? 'Yes' : 'No',
+      e.current_status || '',
+    ].join(','))
+  ];
+
+  // Download
+  const csvStr = csvRows.join(String.fromCharCode(13,10)); const blob = new Blob([csvStr], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+
+  showToast(`✅ Exported ${rows.length} equipment to ${filename}`);
+}
+
+async function duplicateEquipment(id) {
+  // Load the source equipment data
+  try {
+    const data = await api(`/equipment?plant=&department=`);
+    const source = (data.data || []).find(e => e.id === id);
+    if (!source) { showToast('Equipment not found', 'error'); return; }
+
+    // Open a fresh modal pre-filled with source data
+    await openEqModal();
+
+    // Pre-fill all fields from source (except code — user must change it)
+    document.getElementById('eqModalTitle').textContent = 'Copy Equipment';
+    document.getElementById('eqName').value     = source.name + ' (Copy)';
+    document.getElementById('eqType').value     = source.type     || '';
+    document.getElementById('eqLocation').value = source.location || '';
+    document.getElementById('eqDept').value     = source.department || '';
+    document.getElementById('eqPlant').value    = source.plant    || '';
+
+    // Trigger dept change to show correct toggles
+    onEqDeptChange();
+    document.getElementById('eqHourlyEntry').checked = !!source.hourly_entry;
+
+    // Copy monitoring types from source — strip dbId so they save as NEW records
+    try {
+      const mData = await api(`/eq-monitoring/equipment/${id}`);
+      if (mData.data && mData.data.length) {
+        mData.data.forEach(m => addMonitoringRow({ ...m, id: null }));
+      }
+    } catch(ex) { console.warn('Could not copy monitoring types:', ex); }
+
+    // Focus on name field so user can edit it
+    const nameEl = document.getElementById('eqName');
+    nameEl.focus();
+    nameEl.select();
+
+    showToast('Edit the name & code, then click Save', 'info');
+  } catch(e) {
+    showToast(e.message, 'error');
+  }
+}
+
+// 👇 ADD DELETE FUNCTION HERE (RIGHT AFTER duplicateEquipment)
+async function deleteEquipment(id) {
+  if (!confirm('⚠️ Delete this equipment? This will also delete all monitoring types, shift parameters, and entries. This cannot be undone!')) return;
+  try {
+    await api(`/equipment/${id}`, { method: 'DELETE' });
+    showToast('✅ Equipment deleted successfully');
+    loadEquipment(); // Refresh the table
+  } catch(e) {
+    showToast('Delete failed: ' + e.message, 'error');
+  }
+}
+
+async function openEqModal() {
+  document.getElementById('eqId').value = '';
+  ['eqCode','eqName','eqType','eqLocation'].forEach(f => document.getElementById(f).value = '');
+  document.getElementById('eqDept').value  = '';
+  document.getElementById('eqPlant').value = '';
+  document.getElementById('eqModalTitle').textContent = 'Add Equipment';
+  clearParamRows();
+  clearMonitoringRows();
+  await loadEqDropdowns();
+  document.getElementById('eqModal').classList.add('open');
+}
+
+async function editEquipment(id) {
+  const data = await api(`/equipment/${id}`);
+  const e = data.data;
+  document.getElementById('eqId').value       = e.id;
+  document.getElementById('eqCode').value     = e.code;
+  document.getElementById('eqName').value     = e.name;
+  document.getElementById('eqType').value     = e.type || '';
+  document.getElementById('eqLocation').value = e.location || '';
+  clearParamRows();
+  await loadEqDropdowns();
+  document.getElementById('eqPlant').value = e.plant || '';
+  document.getElementById('eqDept').value  = e.department || '';  // set FIRST
+  onEqDeptChange();                                                 // then toggle based on dept
+  document.getElementById('eqHourlyEntry').checked = !!e.hourly_entry;
+  // Load monitoring types for this equipment
+  clearMonitoringRows();
+  try {
+    const mData = await api(`/eq-monitoring/equipment/${id}`);
+    if (mData.data && mData.data.length) {
+      mData.data.forEach(m => addMonitoringRow(m));
+    }
+  } catch(ex) { console.warn('Could not load monitoring types:', ex); }
+
+  // Load existing shift monitoring parameters
+  clearParamRows();
+  try {
+    const pData = await api(`/shift-monitoring/equipment/${id}`);
+    if (pData.data && pData.data.length) {
+      pData.data.forEach(p => addExistingParamRow(p));
+    }
+  } catch(ex) { console.warn('Could not load shift params:', ex); }
+
+  document.getElementById('eqModalTitle').textContent = 'Edit Equipment';
+  document.getElementById('eqModal').classList.add('open');
+}
+
+// ── EQUIPMENT MONITORING ROWS ────────────────────────────────
+let monitoringRowCount = 0;
+
+function addMonitoringRow(existing) {
+  monitoringRowCount++;
+  const n   = monitoringRowCount;
+  const div = document.createElement('div');
+  div.id    = `monRow_${n}`;
+  div.style = 'border:1px solid #e2e8f0;border-radius:8px;padding:.75rem;margin-bottom:.75rem;background:#f8fafc';
+  div.dataset.monDbId = existing ? existing.id : '';
+
+  // Pre-fill if editing existing
+  const name    = existing ? existing.monitoring_name : '';
+  const unit    = existing ? (existing.unit || '') : '';
+  const refs    = existing ? (existing.reference_values || []) : [];
+  const cols    = existing ? (existing.columns || []) : [];
+  const order   = existing ? (existing.display_order || 1) : 1;
+
+  div.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem">
+      <strong style="font-size:.85rem;color:#1e40af">📡 Monitoring Type #${n}</strong>
+      <button type="button" onclick="removeMonitoringRow(${n})"
+        style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:6px;
+               padding:.25rem .6rem;cursor:pointer;font-size:.78rem">✕ Remove</button>
+    </div>
+    <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:.6rem;margin-bottom:.6rem">
+      <div>
+        <label style="font-size:.78rem;color:#64748b;font-weight:600">Monitoring Name *</label>
+        <input class="form-control" id="monName_${n}" value="${name}"
+          placeholder="e.g. Load Monitoring, Vibration" style="font-size:.85rem">
+      </div>
+      <div>
+        <label style="font-size:.78rem;color:#64748b;font-weight:600">Unit</label>
+        <input class="form-control" id="monUnit_${n}" value="${unit}"
+          placeholder="A, °C, mm/s" style="font-size:.85rem">
+      </div>
+      <div>
+        <label style="font-size:.78rem;color:#64748b;font-weight:600">Display Order</label>
+        <input class="form-control" id="monOrder_${n}" type="number" value="${order}"
+          min="1" style="font-size:.85rem">
+      </div>
+    </div>
+    <div style="margin-bottom:.6rem">
+      <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;
+                    background:#fefce8;border:1px solid #fde68a;border-radius:8px;
+                    padding:.5rem .75rem;width:fit-content">
+        <input type="checkbox" id="monGenShift_${n}"
+          ${existing && existing.general_shift_only === true ? 'checked' : ''}
+          style="width:15px;height:15px;cursor:pointer;accent-color:#d97706">
+        <span style="font-size:.82rem;font-weight:600;color:#92400e">
+          🕘 General Shift Only (9AM–6PM)
+        </span>
+        <span style="font-size:.75rem;color:#92400e;font-weight:400">
+          — Other shifts will need admin unlock to fill this
+        </span>
+      </label>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-bottom:.6rem">
+      <div>
+        <label style="font-size:.78rem;color:#64748b;font-weight:600">
+          Reference Values
+          <span style="font-weight:400;color:#94a3b8">(label:value pairs, comma separated)</span>
+        </label>
+        <input class="form-control" id="monRefs_${n}"
+          value="${refs.map(r => r.label + ':' + r.value).join(', ')}"
+          placeholder="e.g. 100% Load:75, Critical:85" style="font-size:.85rem">
+      </div>
+      <div>
+        <label style="font-size:.78rem;color:#64748b;font-weight:600">
+          Column Labels
+          <span style="font-weight:400;color:#94a3b8">(optional — comma separated)</span>
+        </label>
+        <input class="form-control" id="monCols_${n}"
+          value="${cols.map(col => col.label).join(', ')}"
+          placeholder="e.g. R Phase, Y Phase, B Phase (leave blank for single Value column)"
+          style="font-size:.85rem">
+      </div>
+    </div>`;
+
+  document.getElementById('eqMonitoringRows').appendChild(div);
+}
+
+async function removeMonitoringRow(n) {
+  const el = document.getElementById(`monRow_${n}`);
+  if (!el) return;
+  const dbId = el.dataset.monDbId;
+  if (dbId) {
+    if (!confirm('Delete this monitoring type permanently? Historical readings will be lost.')) return;
+    try {
+      await api(`/eq-monitoring/${dbId}`, { method: 'DELETE' });
+      showToast('Monitoring type removed ✓');
+    } catch(e) {
+      showToast('Failed to delete: ' + e.message, 'error');
+      return;
+    }
+  }
+  el.remove();
+}
+
+function clearMonitoringRows() {
+  document.getElementById('eqMonitoringRows').innerHTML = '';
+  monitoringRowCount = 0;
+}
+
+function getMonitoringRows() {
+  const rows = [];
+  // Scope to eqMonitoringRows container only
+  const container = document.getElementById('eqMonitoringRows');
+  if (!container) return rows;
+  container.querySelectorAll('[id^="monRow_"]').forEach(row => {
+    const n    = row.id.split('_')[1];
+    const name = document.getElementById(`monName_${n}`)?.value.trim();
+    if (!name) return;
+    const unit  = document.getElementById(`monUnit_${n}`)?.value.trim();
+    const order = document.getElementById(`monOrder_${n}`)?.value || 1;
+    const dbId  = row.dataset.monDbId || null;
+
+    // Parse reference values: "100% Load:75, Critical:85" → [{label,value}]
+    const refsRaw = document.getElementById(`monRefs_${n}`)?.value.trim();
+    const refs = refsRaw ? refsRaw.split(',').map(r => {
+      const parts = r.trim().split(':');
+      return { label: parts[0]?.trim(), value: parts.slice(1).join(':').trim() };
+    }).filter(r => r.label) : [];
+
+    // Parse columns: "R Phase, Y Phase, B Phase" → [{label}]
+    const colsRaw = document.getElementById(`monCols_${n}`)?.value.trim();
+    const cols = colsRaw ? colsRaw.split(',').map(c => ({ label: c.trim() })).filter(c => c.label) : [];
+
+    const genShift = document.getElementById(`monGenShift_${n}`)?.checked === true;
+    rows.push({ dbId, name, unit, refs, cols, order: parseInt(order), genShift });
+  });
+  return rows;
+}
+
+async function saveEquipment() {
+  const id = document.getElementById('eqId').value;
+  const body = {
+    code:            document.getElementById('eqCode').value.trim().toUpperCase(),
+    name:            document.getElementById('eqName').value.trim(),
+    department:      document.getElementById('eqDept').value,
+    type:            document.getElementById('eqType').value.trim(),
+    location:        document.getElementById('eqLocation').value.trim(),
+    plant:           document.getElementById('eqPlant').value,
+    hourly_entry:    document.getElementById('eqHourlyEntry').checked,
+    load_monitoring: document.getElementById('eqLoadMonitoring')?.checked || false,
+    kw_capacity:     document.getElementById('eqKwCapacity')?.value    || null,
+    load_100pct:     document.getElementById('eqLoad100pct')?.value    || null,
+    critical_load:   document.getElementById('eqCriticalLoad')?.value  || null,
+  };
+
+  if (!body.code || !body.name || !body.department || !body.plant) {
+    showToast('Code, Name, Department and Plant required', 'error');
+    return;
+  }
+
+  try {
+    let eqId = id;
+
+    // ── 1. Save equipment core ────────────────────────────────
+    if (id) {
+      const putResult = await api(`/equipment/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+      if (!putResult.success) throw new Error(putResult.message || 'Failed to update equipment');
+    } else {
+      const result = await api('/equipment', { method: 'POST', body: JSON.stringify(body) });
+      if (!result.success) throw new Error(result.message || 'Failed to create equipment');
+      eqId = result.data.id;
+    }
+
+    // ── 2. Save shift monitoring parameters ──────────────────
+    const paramRows = getParamRows();
+    // Use Number() to ensure type consistency when comparing with DB ids (which are integers)
+    const savedParamIds = new Set();
+
+    for (const param of paramRows) {
+      try {
+        if (!param.parameter_name) continue; // skip blank rows
+
+        if (param.dbId) {
+          // UPDATE existing param
+          await api(`/shift-monitoring/${param.dbId}`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              parameter_name: param.parameter_name,
+              standard_value: param.standard_value || null,
+              unit:           param.unit           || null,
+              display_order:  param.display_order  || 1,
+	      columns: param.columns || [],           // ✅ Saves zones
+              is_dynamic: param.is_dynamic || false,  // ✅ Saves dynamic setting
+              user_boxes: param.user_boxes || []      // ✅ Saves suggestions	
+            })
+          });
+          savedParamIds.add(Number(param.dbId)); // ← Number() ensures int comparison works
+        } else {
+          // CREATE new param
+          const result = await api(`/shift-monitoring/equipment/${eqId}`, {
+            method: 'POST',
+            body: JSON.stringify({
+              plant:          body.plant,
+              department:     body.department,
+              parameter_name: param.parameter_name,
+              standard_value: param.standard_value || null,
+              unit:           param.unit           || null,
+              display_order:  param.display_order  || 1,
+	     // Process-only dynamic support
+    	     columns:
+      		(body.department || '').toLowerCase() === 'process'
+       		 ? (param.columns || [])
+        	 : [],
+
+    	      is_dynamic:
+      		(body.department || '').toLowerCase() === 'process'
+        	? (param.is_dynamic || false)
+        	: false,
+
+   	     user_boxes:
+      		(body.department || '').toLowerCase() === 'process'
+        	? (param.user_boxes || [])
+        	: []	
+
+            })
+          });
+          if (result.data?.id) savedParamIds.add(Number(result.data.id));
+        }
+      } catch(paramErr) {
+        console.warn('Param save failed:', param.parameter_name, paramErr.message);
+      }
+    }
+
+    // DELETE params removed from UI
+    try {
+      const existing = await api(`/shift-monitoring/equipment/${eqId}`);
+      for (const ep of (existing.data || [])) {
+        if (!savedParamIds.has(Number(ep.id))) {
+          await api(`/shift-monitoring/${ep.id}`, { method: 'DELETE' });
+        }
+      }
+    } catch(delErr) {
+      console.warn('Param delete failed:', delErr.message);
+    }
+
+    // ── 3. Save monitoring types ──────────────────────────────
+    const monRows = getMonitoringRows();
+    for (const mon of monRows) {
+      const monBody = {
+        monitoring_name:    mon.name,
+        unit:               mon.unit  || null,
+        reference_values:   mon.refs,
+        columns:            mon.cols,
+        display_order:      mon.order,
+        general_shift_only: mon.genShift === true,
+      };
+      try {
+        if (mon.dbId) {
+          await api(`/eq-monitoring/${mon.dbId}`, { method: 'PUT', body: JSON.stringify(monBody) });
+        } else {
+          await api(`/eq-monitoring/equipment/${eqId}`, { method: 'POST', body: JSON.stringify(monBody) });
+        }
+      } catch(monErr) {
+        showToast(`Failed to save monitoring type "${mon.name}": ${monErr.message}`, 'error');
+        return;
+      }
+    }
+
+    showToast(`Equipment saved${monRows.length ? ` with ${monRows.length} monitoring type(s)` : ''} ✅`);
+    closeModal('eqModal');
+    loadEquipment();
+
+  } catch(e) {
+    showToast(e.message, 'error');
+  }
+}
+
+
+// ── USERS ──────────────────────────────────────────────────
+async function loadUsers() {
+  try {
+    const data = await api('/admin/users');
+    let html = `<div class="table-wrap"><table><thead><tr>
+      <th>Username</th><th>Full Name</th><th>Role</th><th>Department</th><th>Plant</th><th>Status</th><th>Actions</th>
+    </tr></thead><tbody>`;
+    data.data.forEach(u => {
+      html += `<tr>
+        <td><strong>${u.username}</strong></td>
+        <td>${u.full_name}</td>
+        <td><span class="badge" style="background:#dbeafe;color:#1e40af">${u.role === 'operator' ? 'Shift-in-Charge' : u.role === 'maintenance' ? 'Department Head' : u.role}</span></td>
+        <td style="font-size:.82rem">${u.department || '—'}</td>
+        <td style="font-size:.82rem">${u.plant || '—'}</td>
+        <td><span class="badge ${u.active ? 'badge-running' : 'badge-stopped'}">${u.active ? 'Active' : 'Inactive'}</span></td>
+        <td style="display:flex;gap:.3rem;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" onclick="editUser(${u.id})">✏️ Edit</button>
+          <button class="btn btn-outline btn-sm" onclick="resetPw(${u.id})">Reset PW</button>
+          <button class="btn btn-outline btn-sm" onclick="toggleUser(${u.id}, ${!u.active})">${u.active ? 'Deactivate' : 'Activate'}</button>
+        </td>
+      </tr>`;
+    });
+    html += '</tbody></table></div>';
+    document.getElementById('userTable').innerHTML = html;
+  } catch(e) {}
+}
+
+function openUserModal() {
+  ['uUsername','uPassword','uFullName','uRole','uDept'].forEach(f => document.getElementById(f).value = '');
+  document.getElementById('userId').value = '';
+  document.getElementById('uDeptGroup').style.display = 'none';
+  document.getElementById('uUsername').readOnly = false;
+  document.getElementById('uUsername').style.background = '';
+  document.getElementById('userModalTitle').textContent = 'Add User';
+  loadUserDropdowns().then(() => {
+    document.getElementById('userModal').classList.add('open');
+  });
+}
+
+async function editUser(id) {
+  try {
+    const data = await api('/admin/users');
+    const u = data.data.find(u => u.id === id);
+    if (!u) return;
+    await loadUserDropdowns();
+    document.getElementById('userId').value    = u.id;
+    document.getElementById('uUsername').value = u.username;
+    document.getElementById('uUsername').readOnly = true;
+    document.getElementById('uUsername').style.background = '#f1f5f9';
+    document.getElementById('uPassword').value = '';
+    document.getElementById('uFullName').value = u.full_name;
+    document.getElementById('uRole').value     = u.role;
+    // Wait for dropdown then set plant
+    setTimeout(() => {
+      // Set plant fields based on role
+      const editRole = u.role;
+      onRoleChange(); // trigger UI update first
+      if (editRole === 'operator' || editRole === 'maintenance') {
+        document.getElementById('uPlant100').checked = (u.plant === '100TPD' || u.plant === 'BOTH');
+        document.getElementById('uPlant225').checked = (u.plant === '225TPD' || u.plant === 'BOTH');
+      } else {
+        document.getElementById('uPlantSelect').value = u.plant || '';
+      }
+    }, 100);
+    // Show/hide department
+    if (u.role === 'operator' || u.role === 'maintenance') {
+      document.getElementById('uDeptGroup').style.display = 'block';
+      setTimeout(() => {
+        document.getElementById('uDept').value = u.department || '';
+      }, 100);
+    } else {
+      document.getElementById('uDeptGroup').style.display = 'none';
+      document.getElementById('uDept').value = '';
+    }
+    document.getElementById('userModalTitle').textContent = 'Edit User';
+    document.getElementById('userModal').classList.add('open');
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function saveUser() {
+  const role = document.getElementById('uRole').value;
+  const body = {
+    username:   document.getElementById('uUsername').value,
+    password:   document.getElementById('uPassword').value,
+    full_name:  document.getElementById('uFullName').value,
+    role:       role,
+
+    department: document.getElementById('uDept').value || null,
+    plant:      getSelectedPlant(role)
+  };
+  if (!body.username || !body.password || !body.full_name || !body.role) { showToast('All required fields missing', 'error'); return; }
+  if (!body.plant) { showToast('Please select at least one plant', 'error'); return; }
+  if ((role === 'operator' || role === 'maintenance') && !body.department) { showToast('Department is required for Shift Incharge and HOD', 'error'); return; }
+  const userId = document.getElementById('userId').value;
+  // Password optional on edit
+  if (!userId && !body.password) { showToast('Password is required', 'error'); return; }
+  if (body.password && body.password.length < 6) { showToast('Password must be at least 6 characters', 'error'); return; }
+  if (!body.password) delete body.password;
+
+  try {
+    const token = getToken();
+    const url    = userId ? `${API_BASE}/admin/users/${userId}` : `${API_BASE}/admin/users`;
+    const method = userId ? 'PUT' : 'POST';
+    const res = await fetch(url, {
+      method,
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message);
+    showToast('User created');
+    closeModal('userModal');
+    loadUsers();
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function resetPw(userId) {
+  const pw = prompt('Enter new password (min 6 chars):');
+  if (!pw || pw.length < 6) { showToast('Invalid password', 'error'); return; }
+  try {
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/admin/users/${userId}/reset-password`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ new_password: pw })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message);
+    showToast('Password reset successfully');
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function toggleUser(userId, active) {
+  try {
+    const token = getToken();
+    const res = await fetch(`${API_BASE}/admin/users/${userId}`, {
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ active })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message);
+    showToast(`User ${active ? 'activated' : 'deactivated'}`);
+    loadUsers();
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+// ── STOP REASONS ──────────────────────────────────────────
+async function loadSr() {
+  try {
+    const data = await api('/admin/stop-reasons');
+    let html = `<div class="table-wrap"><table><thead><tr><th>Code</th><th>Description</th><th>Category</th><th>Status</th><th>Actions</th></tr></thead><tbody>`;
+    data.data.forEach(r => {
+      html += `<tr>
+        <td><code>${r.code}</code></td>
+        <td>${r.description}</td>
+        <td>${r.category || '—'}</td>
+        <td><span class="badge ${r.active ? 'badge-running' : 'badge-stopped'}">${r.active ? 'Active' : 'Inactive'}</span></td>
+        <td><button class="btn btn-outline btn-sm" onclick="toggleSr(${r.id}, ${!r.active}, '${r.description}', '${r.category}')">${r.active ? 'Disable' : 'Enable'}</button></td>
+      </tr>`;
+    });
+    html += '</tbody></table></div>';
+    document.getElementById('srTable').innerHTML = html;
+  } catch(e) {}
+}
+
+function openSrModal() { document.getElementById('srModal').classList.add('open'); }
+
+async function saveSr() {
+  const body = {
+    code: document.getElementById('srCode').value.toUpperCase(),
+    description: document.getElementById('srDesc').value,
+    category: document.getElementById('srCat').value
+  };
+  if (!body.code || !body.description) { showToast('Code and description required', 'error'); return; }
+  try {
+    // ✅ CORRECT: "method" not "met"
+    await api('/admin/stop-reasons', { method: 'POST', body: JSON.stringify(body) });
+    showToast('Stop reason added');
+    closeModal('srModal');
+    loadSr();
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function toggleSr(id, active, description, category) {
+  await api(`/admin/stop-reasons/${id}`, { method: 'PUT', body: JSON.stringify({ description, category, active }) });
+  showToast(`Reason ${active ? 'enabled' : 'disabled'}`);
+  loadSr();
+}
+
+// ── AUDIT LOG ─────────────────────────────────────────────
+async function loadAudit() {
+  try {
+    const data = await api('/admin/audit-log');
+    let html = `<div class="table-wrap"><table><thead><tr><th>Time</th><th>User</th><th>Action</th><th>Table</th><th>Record ID</th><th>IP</th></tr></thead><tbody>`;
+    data.data.forEach(r => {
+      html += `<tr>
+        <td style="font-size:.8rem">${formatDateTime(r.logged_at)}</td>
+        <td>${r.full_name || r.username || '—'}</td>
+        <td><code style="font-size:.8rem">${r.action}</code></td>
+        <td style="font-size:.82rem">${r.table_name || '—'}</td>
+        <td style="font-size:.82rem">${r.record_id || '—'}</td>
+        <td style="font-size:.78rem;color:#64748b">${r.ip_address || '—'}</td>
+      </tr>`;
+    });
+    html += '</tbody></table></div>';
+    document.getElementById('auditTable').innerHTML = html;
+  } catch(e) {}
+}
+
+
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function logout() { clearSession(); window.location.href = '../login.html'; }
+init();
+
+
+
+// ── MASTERS ───────────────────────────────────────────
+let allPlants = [];
+
+async function loadMastersTab() {
+  await Promise.all([loadPlants(), loadDepts(), loadShifts()]);
+}
+
+async function loadPlants() {
+  try {
+    const data = await api('/masters/plants');
+    allPlants = data.data;
+    let html = '';
+    if (!allPlants.length) {
+      html = '<p style="color:#94a3b8;font-size:.85rem">No plants added yet.</p>';
+    } else {
+      allPlants.forEach(p => {
+        html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:.6rem 0;border-bottom:1px solid #f1f5f9">
+          <div><strong>${p.name}</strong><span style="font-size:.75rem;color:#64748b;margin-left:.5rem">${p.code}</span></div>
+          <div style="display:flex;gap:.4rem">
+            <button class="btn btn-outline btn-sm" onclick='openEditMaster("plant",${JSON.stringify(p)})'>✏️</button>
+            <button class="btn btn-sm" style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5" onclick="deleteMaster('plant',${p.id})">🗑️</button>
+          </div>
+        </div>`;
+      });
+    }
+    document.getElementById('plantsList').innerHTML = html;
+  } catch(e) { document.getElementById('plantsList').innerHTML = `<p style="color:red">${e.message}</p>`; }
+}
+
+async function loadDepts() {
+  try {
+    const data = await api('/masters/departments');
+    const depts = data.data;
+    let html = '';
+    if (!depts.length) {
+      html = '<p style="color:#94a3b8;font-size:.85rem">No departments added yet.</p>';
+    } else {
+      depts.forEach(d => {
+        html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:.6rem 0;border-bottom:1px solid #f1f5f9">
+          <div><strong>${d.name}</strong><span style="font-size:.75rem;color:#64748b;margin-left:.5rem">${d.plant_name}</span></div>
+          <div style="display:flex;gap:.4rem">
+            <button class="btn btn-outline btn-sm" onclick='openEditMaster("department",${JSON.stringify(d)})'>✏️</button>
+            <button class="btn btn-sm" style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5" onclick="deleteMaster('department',${d.id})">🗑️</button>
+          </div>
+        </div>`;
+      });
+    }
+    document.getElementById('deptsList').innerHTML = html;
+  } catch(e) { document.getElementById('deptsList').innerHTML = `<p style="color:red">${e.message}</p>`; }
+}
+
+async function loadShifts() {
+  try {
+    const data = await api('/masters/shifts');
+    const shifts = data.data;
+    let html = '';
+    if (!shifts.length) {
+      html = '<p style="color:#94a3b8;font-size:.85rem">No shifts added yet.</p>';
+    } else {
+      shifts.forEach(s => {
+        html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:.6rem 0;border-bottom:1px solid #f1f5f9">
+          <div><strong>${s.name}</strong><span style="font-size:.75rem;color:#64748b;margin-left:.5rem">${s.plant_name} · ${s.code}</span></div>
+          <div style="display:flex;gap:.4rem">
+            <button class="btn btn-outline btn-sm" onclick='openEditMaster("shift",${JSON.stringify(s)})'>✏️</button>
+            <button class="btn btn-sm" style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5" onclick="deleteMaster('shift',${s.id})">🗑️</button>
+          </div>
+        </div>`;
+      });
+    }
+    document.getElementById('shiftsList').innerHTML = html;
+  } catch(e) { document.getElementById('shiftsList').innerHTML = `<p style="color:red">${e.message}</p>`; }
+}
+
+async function populatePlantDropdown() {
+  if (!allPlants.length) { const d = await api('/masters/plants'); allPlants = d.data; }
+  const sel = document.getElementById('masterPlantId');
+  sel.innerHTML = '<option value="">— Select Plant —</option>';
+  allPlants.forEach(p => { sel.innerHTML += `<option value="${p.id}">${p.name}</option>`; });
+}
+
+function openMasterModal(type) {
+  document.getElementById('masterId').value   = '';
+  document.getElementById('masterType').value = type;
+  document.getElementById('masterName').value = '';
+  document.getElementById('masterCode').value = '';
+  if (type === 'plant') {
+    document.getElementById('masterModalTitle').textContent = 'Add Plant';
+    document.getElementById('masterCodeGroup').style.display = 'block';
+    document.getElementById('masterCodeLabel').textContent  = 'Code (e.g. 100TPD)';
+    document.getElementById('masterPlantGroup').style.display = 'none';
+  } else if (type === 'department') {
+    document.getElementById('masterModalTitle').textContent = 'Add Department';
+    document.getElementById('masterCodeGroup').style.display = 'none';
+    document.getElementById('masterPlantGroup').style.display = 'block';
+    populatePlantDropdown();
+  } else if (type === 'shift') {
+    document.getElementById('masterModalTitle').textContent = 'Add Shift';
+    document.getElementById('masterCodeGroup').style.display = 'block';
+    document.getElementById('masterCodeLabel').textContent  = 'Shift Code (e.g. A, B, C)';
+    document.getElementById('masterPlantGroup').style.display = 'block';
+    populatePlantDropdown();
+  }
+  document.getElementById('masterModal').classList.add('open');
+}
+
+function openEditMaster(type, item) {
+  document.getElementById('masterId').value   = item.id;
+  document.getElementById('masterType').value = type;
+  document.getElementById('masterName').value = item.name;
+  document.getElementById('masterCode').value = item.code || '';
+  if (type === 'plant') {
+    document.getElementById('masterModalTitle').textContent = 'Edit Plant';
+    document.getElementById('masterCodeGroup').style.display = 'block';
+    document.getElementById('masterPlantGroup').style.display = 'none';
+  } else if (type === 'department') {
+    document.getElementById('masterModalTitle').textContent = 'Edit Department';
+    document.getElementById('masterCodeGroup').style.display = 'none';
+    document.getElementById('masterPlantGroup').style.display = 'block';
+    populatePlantDropdown().then(() => { document.getElementById('masterPlantId').value = item.plant_id; });
+  } else if (type === 'shift') {
+    document.getElementById('masterModalTitle').textContent = 'Edit Shift';
+    document.getElementById('masterCodeGroup').style.display = 'block';
+    document.getElementById('masterPlantGroup').style.display = 'block';
+    populatePlantDropdown().then(() => { document.getElementById('masterPlantId').value = item.plant_id; });
+  }
+  document.getElementById('masterModal').classList.add('open');
+}
+
+function closeMasterModal() {
+  document.getElementById('masterModal').classList.remove('open');
+}
+
+async function saveMaster() {
+  const id      = document.getElementById('masterId').value;
+  const type    = document.getElementById('masterType').value;
+  const name    = document.getElementById('masterName').value.trim();
+  const code    = document.getElementById('masterCode').value.trim();
+  const plantId = document.getElementById('masterPlantId').value;
+  if (!name) { showToast('Name is required', 'error'); return; }
+  if (type === 'plant' && !code) { showToast('Code is required', 'error'); return; }
+  if ((type === 'department' || type === 'shift') && !plantId) { showToast('Please select a plant', 'error'); return; }
+  if (type === 'shift' && !code) { showToast('Shift code is required', 'error'); return; }
+  const btn = document.querySelector('#masterModal .btn-primary');
+  btn.disabled = true; btn.textContent = 'Saving...';
+  try {
+    const token = getToken();
+    let url = `${API_BASE}/masters/${type}s`;
+    let method = 'POST';
+    let body = {};
+    if (type === 'plant')      body = { name, code };
+    if (type === 'department') body = { name, plant_id: plantId };
+    if (type === 'shift')      body = { name, code, plant_id: plantId };
+    if (id) { url += `/${id}`; method = 'PUT'; body.is_active = true; }
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message);
+    showToast(`${type} saved successfully`);
+    closeMasterModal();
+    loadMastersTab();
+  } catch(e) {
+    showToast(e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '💾 Save';
+  }
+}
+
+async function deleteMaster(type, id) {
+  if (!confirm(`Delete this ${type}?`)) return;
+  try {
+    const token = getToken();
+    await fetch(`${API_BASE}/masters/${type}s/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    showToast(`${type} deleted`);
+    loadMastersTab();
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+// ── EQUIPMENT PARAM ROWS ─────────────────────────────
+let paramRowCount = 0;
+
+function addParamRow(existingParam = null) {
+  paramRowCount++;
+  const div = document.createElement('div');
+  div.id = `paramRow_${paramRowCount}`;
+  
+  if (existingParam && existingParam.id) {
+    div.dataset.paramDbId = existingParam.id;
+  }
+  
+  div.style = 'border:1px solid #e2e8f0;border-radius:10px;padding:.75rem;margin-bottom:.75rem;background:#ffffff';
+  
+  // Get existing boxes
+  const existingBoxes = (existingParam && existingParam.columns) ? existingParam.columns : [];
+  
+  div.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
+      <strong style="font-size:.85rem;color:#1e40af">📊 Zone Parameter #${paramRowCount}</strong>
+      <button type="button" onclick="removeParamRow(${paramRowCount})" 
+        style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:6px;
+               padding:.25rem .6rem;cursor:pointer;font-size:.78rem">✕ Remove</button>
+    </div>
+    
+    <div style="margin-bottom:.75rem">
+      <label style="font-size:.75rem;color:#64748b;font-weight:600">Parameter Name</label>
+      <input class="form-control" placeholder="e.g., Kiln Temperature, Zone Temperature" 
+             id="pName_${paramRowCount}" value="${existingParam ? (existingParam.parameter_name || '') : ''}" 
+             style="font-size:.85rem; margin-top:.2rem">
+    </div>
+    
+    <div style="margin-bottom:.75rem">
+      <label style="font-size:.75rem;color:#64748b;font-weight:600">Unit</label>
+      <input class="form-control" placeholder="e.g., °C, RPM, A" 
+             id="pUnit_${paramRowCount}" value="${existingParam ? (existingParam.unit || '') : ''}" 
+             style="font-size:.85rem; margin-top:.2rem">
+    </div>
+    
+    <div style="margin-top:.75rem; border-top:2px solid #e2e8f0; padding-top:.75rem">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:.5rem">
+        <label style="font-size:.75rem;color:#64748b;font-weight:600">🏭 Zone/Position Boxes (Horizontal)</label>
+        <button type="button" onclick="addHorizontalBox(${paramRowCount})" 
+          style="background:#2563eb;color:white;border:none;border-radius:6px;padding:.25rem .6rem;cursor:pointer;font-size:.7rem">
+          + Add Zone
+        </button>
+      </div>
+      <p style="font-size:.7rem;color:#64748b;margin-bottom:.5rem">
+        Add zones/positions like T1, T2, T3, etc. Operators will enter values horizontally.
+      </p>
+      <div id="horizontalBoxes_${paramRowCount}" style="display:flex; flex-wrap:wrap; gap:.5rem; margin-top:.5rem">
+        ${existingBoxes.map((box, idx) => `
+          <div class="horizontal-box" data-box-idx="${idx}" style="display:flex; flex-direction:column; align-items:center; gap:.3rem; background:#f8fafc; padding:.5rem .75rem; border-radius:8px; border:1px solid #e2e8f0; min-width:80px">
+            <input type="text" class="form-control" style="width:80px; text-align:center; font-size:.8rem; padding:.25rem .4rem" 
+              id="boxName_${paramRowCount}_${idx}" value="${box.label}" placeholder="e.g., T${idx+1}">
+            <button type="button" onclick="removeHorizontalBox(${paramRowCount}, ${idx})" 
+              style="background:#fee2e2;color:#991b1b;border:none;border-radius:4px;padding:.15rem .5rem;cursor:pointer;font-size:.65rem">✕</button>
+          </div>
+        `).join('')}
+      </div>
+      <div style="margin-top:.5rem; padding:.5rem; background:#f0fdf4; border-radius:6px;">
+        <span style="font-size:.7rem;color:#166534">💡 Tip: Add zones like T1, T2, T3 for kiln zones, or H1, H2 for heater positions</span>
+      </div>
+    </div>
+  `;
+  
+  const eqParamRowsEl = document.getElementById('eqParamRows');
+  if (eqParamRowsEl) eqParamRowsEl.appendChild(div);
+}
+
+// Pre-fill existing param row when editing equipment
+function addExistingParamRow(existing) {
+  paramRowCount++;
+  const n = paramRowCount;
+  const div = document.createElement('div');
+  div.id = `paramRow_${n}`;
+  div.dataset.paramDbId = existing.id;
+  div.style = 'display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:.5rem;margin-bottom:.5rem;align-items:center';
+  div.innerHTML = `
+    <input class="form-control" value="${existing.parameter_name || ''}" id="pName_${n}" style="font-size:.85rem">
+    <input class="form-control pStdInput" value="${existing.standard_value || ''}" id="pStd_${n}" style="font-size:.85rem">
+    <input class="form-control" value="${existing.unit || ''}" placeholder="Unit" id="pUnit_${n}" style="font-size:.85rem">
+    <button type="button" onclick="removeParamRow(${n})" style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:6px;padding:.4rem .6rem;cursor:pointer">✕</button>
+  `;
+  const eqParamRowsEl = document.getElementById('eqParamRows');
+  if (eqParamRowsEl) eqParamRowsEl.appendChild(div);
+}
+
+async function removeParamRow(n) {
+    const el = document.getElementById(`paramRow_${n}`);
+    if (!el) return;
+    
+    // Check if this parameter exists in database
+    const paramDbId = el.dataset.paramDbId;
+    
+    if (paramDbId) {
+        // Confirm before permanent deletion
+        if (confirm('⚠️ Delete this parameter permanently? This will also delete all historical readings for this parameter.')) {
+            try {
+                await api(`/shift-monitoring/${paramDbId}`, { method: 'DELETE' });
+                el.remove();
+                showToast('✅ Parameter deleted successfully');
+            } catch(e) {
+                showToast('Failed to delete: ' + e.message, 'error');
+            }
+        }
+    } else {
+        // New unsaved parameter - just remove from UI
+        el.remove();
+    }
+}
+
+function getParamRows() {
+    const rows = [];
+    // Scope to eqParamRows container only
+    const container = document.getElementById('eqParamRows');
+    if (!container) return rows;
+    const allParamRows = container.querySelectorAll('[id^="paramRow_"]') || [];
+    allParamRows.forEach(row => {
+        const n = row.id.split('_')[1];
+        const dbId = row.dataset.paramDbId || null;
+
+        // Read name — present in both row types
+        const nameEl = document.getElementById(`pName_${n}`);
+        const name = nameEl ? nameEl.value.trim() : '';
+
+        // Read unit — present in both row types
+        const unitEl = document.getElementById(`pUnit_${n}`);
+        const unit = unitEl ? unitEl.value.trim() : '';
+
+        // Read standard value — present in addExistingParamRow (pStd_N)
+        const stdEl = document.getElementById(`pStd_${n}`);
+        const standard_value = stdEl ? stdEl.value.trim() || null : null;
+
+        // Skip completely empty new rows
+        if (!name && !dbId) return;
+
+        // Read horizontal zone boxes (columns) — only present in addParamRow (zone type)
+        const boxesContainer = document.getElementById(`horizontalBoxes_${n}`);
+        const columns = [];
+        if (boxesContainer) {
+          boxesContainer.querySelectorAll('.horizontal-box').forEach(function(box) {
+            const inp = box.querySelector('input[type="text"]');
+            if (inp && inp.value.trim()) {
+              columns.push({ label: inp.value.trim() });
+            }
+          });
+        }
+
+const dept =
+   (document.getElementById('eqDept')?.value || '').toLowerCase();
+
+// For Process department, ANY parameter with columns should be dynamic
+const isDynamic = (dept === 'process' && columns.length > 0);
+
+rows.push({
+    dbId: dbId,
+    parameter_name: name,
+    standard_value: standard_value,
+    unit: unit || null,
+    columns: columns,
+    display_order: 1,
+    is_dynamic: isDynamic,  // ← TRUE for Process parameters with zones
+    user_boxes: isDynamic ? columns : []  // ← Use columns as user_boxes for dynamic rows
+        });
+    });
+
+    return rows;
+}
+function clearParamRows() {
+    const el = document.getElementById('eqParamRows');
+    if (el) el.innerHTML = '';
+    paramRowCount = 0;
+}
+
+// ── ADD THESE HELPER FUNCTIONS HERE ──────────────────────────────
+// Add a new horizontal zone box
+function addHorizontalBox(rowId) {
+  const container = document.getElementById(`horizontalBoxes_${rowId}`);
+  if (!container) return;
+  
+  const boxCount = container.children.length;
+  const nextNumber = boxCount + 1;
+  
+  const div = document.createElement('div');
+  div.className = 'horizontal-box';
+  div.setAttribute('data-box-idx', boxCount);
+  div.style.cssText = 'display:flex; flex-direction:column; align-items:center; gap:.3rem; background:#f8fafc; padding:.5rem .75rem; border-radius:8px; border:1px solid #e2e8f0; min-width:80px';
+  div.innerHTML = `
+    <input type="text" class="form-control" style="width:80px; text-align:center; font-size:.8rem; padding:.25rem .4rem" 
+      id="boxName_${rowId}_${boxCount}" placeholder="T${nextNumber}">
+    <button type="button" onclick="removeHorizontalBox(${rowId}, ${boxCount})" 
+      style="background:#fee2e2;color:#991b1b;border:none;border-radius:4px;padding:.15rem .5rem;cursor:pointer;font-size:.65rem">✕</button>
+  `;
+  container.appendChild(div);
+}
+
+// Remove a horizontal zone box
+function removeHorizontalBox(rowId, boxIdx) {
+  const container = document.getElementById(`horizontalBoxes_${rowId}`);
+  if (!container) return;
+  
+  const boxes = container.children;
+  if (boxes[boxIdx]) {
+    boxes[boxIdx].remove();
+  }
+}
+
+// Toggle column configuration visibility
+function toggleParamColumns(rowId) {
+  const configDiv = document.getElementById(`paramColumns_${rowId}`);
+  if (configDiv) {
+    configDiv.style.display = configDiv.style.display === 'none' ? 'block' : 'none';
+  }
+}
+
+// Add a column to parameter (Admin predefined)
+function addParamColumn(rowId) {
+  const input = document.getElementById(`paramColInput_${rowId}`);
+  const columnName = input.value.trim();
+  if (!columnName) return;
+  
+  const tagsContainer = document.getElementById(`paramColumnTags_${rowId}`);
+  const columnCount = tagsContainer.children.length;
+  
+  const tag = document.createElement('span');
+  tag.className = 'param-column-tag';
+  tag.innerHTML = `
+    ${columnName}
+    <button type="button" onclick="removeParamColumn(${rowId}, ${columnCount})">✕</button>
+    <input type="hidden" class="paramColumnValue_${rowId}" value="${columnName}">
+  `;
+  tagsContainer.appendChild(tag);
+  input.value = '';
+}
+
+// Remove a column from parameter
+function removeParamColumn(rowId, columnIndex) {
+  const tagsContainer = document.getElementById(`paramColumnTags_${rowId}`);
+  const tags = tagsContainer.querySelectorAll('.param-column-tag');
+  if (tags[columnIndex]) {
+    tags[columnIndex].remove();
+  }
+}
+
+// Add a dynamic parameter row (users can add extra boxes)
+function addDynamicRowConfig(existingParam = null) {
+  paramRowCount++;
+  const div = document.createElement('div');
+  div.id = `paramRow_${paramRowCount}`;
+  div.className = 'dynamic-param-row';
+  
+  if (existingParam && existingParam.id) {
+    div.dataset.paramDbId = existingParam.id;
+    div.dataset.isDynamic = existingParam.is_dynamic ? 'true' : 'false';
+  } else {
+    div.dataset.isDynamic = 'true';
+  }
+  
+  const predefinedColumns = (existingParam && existingParam.columns) ? existingParam.columns : [];
+  const userBoxes = (existingParam && existingParam.user_boxes) ? existingParam.user_boxes : [];
+  
+  div.style = 'border:2px dashed #fcd34d;border-radius:10px;padding:.75rem;margin-bottom:.75rem;background:#fffbeb';
+  div.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem">
+      <div>
+        <strong style="font-size:.85rem;color:#92400e">⚡ Dynamic Parameter</strong>
+        <span class="dynamic-badge">Users can add boxes</span>
+      </div>
+      <button type="button" onclick="removeParamRow(${paramRowCount})" 
+        style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;border-radius:6px;
+               padding:.25rem .6rem;cursor:pointer;font-size:.78rem">✕ Remove</button>
+    </div>
+    <div style="display:grid;grid-template-columns:2fr 1fr auto;gap:.5rem;margin-bottom:.5rem">
+      <input class="form-control" placeholder="Zone/Parameter name (e.g. T1, Zone A)" 
+             id="pName_${paramRowCount}" value="${existingParam ? (existingParam.parameter_name || '') : ''}" 
+             style="font-size:.85rem">
+      <input class="form-control" placeholder="Unit (e.g. °C, A, kW)" 
+             id="pUnit_${paramRowCount}" value="${existingParam ? (existingParam.unit || '') : ''}" 
+             style="font-size:.85rem">
+      <button type="button" onclick="toggleParamColumns(${paramRowCount})" 
+        style="background:#e2e8f0;border:1px solid #cbd5e1;border-radius:6px;padding:.4rem .6rem;cursor:pointer;font-size:.75rem">
+        ⚙️ Admin Columns
+      </button>
+    </div>
+    
+    <div id="paramColumns_${paramRowCount}" class="param-columns-config" style="display:${predefinedColumns.length ? 'block' : 'none'}">
+      <label>📌 Admin Pre-defined Columns (Fixed boxes for users)</label>
+      <div style="display:flex;gap:.5rem;margin-bottom:.5rem">
+        <input type="text" id="paramColInput_${paramRowCount}" class="param-columns-input" 
+               placeholder="e.g. Hour 1, Standard Reading, Base Value" 
+               onkeypress="if(event.key === 'Enter') addParamColumn(${paramRowCount})">
+        <button type="button" onclick="addParamColumn(${paramRowCount})" 
+          style="background:#2563eb;color:white;border:none;border-radius:6px;padding:.4rem .8rem;cursor:pointer">+ Add</button>
+      </div>
+      <div id="paramColumnTags_${paramRowCount}" class="param-columns-tags">
+        ${predefinedColumns.map((col, idx) => `
+          <span class="param-column-tag">
+            ${col.label}
+            <button type="button" onclick="removeParamColumn(${paramRowCount}, ${idx})">✕</button>
+            <input type="hidden" class="paramColumnValue_${paramRowCount}" value="${col.label}">
+          </span>
+        `).join('')}
+      </div>
+      <p style="font-size:.7rem;color:#64748b;margin:.4rem 0 0">
+        These columns will always appear for users.
+      </p>
+    </div>
+    
+    <div class="dynamic-boxes-container" id="userBoxesPreview_${paramRowCount}" style="${userBoxes.length ? 'block' : 'none'}">
+      <label style="font-size:.75rem;color:#92400e;font-weight:600">📦 Suggested Boxes (Users can add more)</label>
+      <div id="userBoxesList_${paramRowCount}">
+        ${userBoxes.map((box, idx) => `
+          <div class="dynamic-box" data-box-idx="${idx}">
+            <input type="text" class="user-box-name" value="${box.label}" placeholder="Box name" style="flex:2">
+            <span style="font-size:.7rem;color:#92400e">Users can fill value here</span>
+            <button type="button" class="remove-box" onclick="removeUserBoxPreview(${paramRowCount}, ${idx})">✕</button>
+          </div>
+        `).join('')}
+      </div>
+      <button type="button" onclick="addUserBoxPreview(${paramRowCount})" class="user-add-box-btn">
+        ➕ Add Suggested Box
+      </button>
+      <p style="font-size:.7rem;color:#92400e;margin:.4rem 0 0">
+        These are suggestions. Users can add/remove their own boxes in the monitoring form.
+      </p>
+    </div>
+  `;
+  
+  const eqParamRowsEl = document.getElementById('eqParamRows');
+  if (eqParamRowsEl) eqParamRowsEl.appendChild(div);
+}
+
+// Add user box preview (for admin to configure example boxes)
+function addUserBoxPreview(rowId) {
+  const container = document.getElementById(`userBoxesList_${rowId}`);
+  const previewDiv = document.getElementById(`userBoxesPreview_${rowId}`);
+  if (!container) return;
+  
+  previewDiv.style.display = 'block';
+  const boxCount = container.children.length;
+  const div = document.createElement('div');
+  div.className = 'dynamic-box';
+  div.setAttribute('data-box-idx', boxCount);
+  div.innerHTML = `
+    <input type="text" class="user-box-name" placeholder="e.g., Extra Reading, Zone B" style="flex:2">
+    <span style="font-size:.7rem;color:#92400e">Users can fill value here</span>
+    <button type="button" class="remove-box" onclick="removeUserBoxPreview(${rowId}, ${boxCount})">✕</button>
+  `;
+  container.appendChild(div);
+}
+
+// Remove user box preview
+function removeUserBoxPreview(rowId, boxIdx) {
+  const container = document.getElementById(`userBoxesList_${rowId}`);
+  if (container && container.children[boxIdx]) {
+    container.children[boxIdx].remove();
+  }
+  if (container.children.length === 0) {
+    document.getElementById(`userBoxesPreview_${rowId}`).style.display = 'none';
+  }
+}
+
+// ── EQUIPMENT DROPDOWN LOADER ────────────────────────
+async function loadEqDropdowns() {
+  try {
+    const deptData  = await api('/masters/departments');
+    const plantData = await api('/masters/plants');
+    const deptSel   = document.getElementById('eqDept');
+    const plantSel  = document.getElementById('eqPlant');
+    const savedDept  = deptSel.value;
+    const savedPlant = plantSel.value;
+    deptSel.innerHTML  = '<option value="">—Select—</option>';
+    plantSel.innerHTML = '<option value="">—Select—</option>';
+    deptData.data.forEach(d => {
+      deptSel.innerHTML += `<option value="${d.name}">${d.name}</option>`;
+    });
+    plantData.data.forEach(p => {
+      plantSel.innerHTML += `<option value="${p.code}">${p.name}</option>`;
+    });
+    if (savedDept)  deptSel.value  = savedDept;
+    if (savedPlant) plantSel.value = savedPlant;
+  } catch(e) { console.error('loadEqDropdowns error:', e); }
+}
+
+// ── USER MODAL HELPERS ───────────────────────────────
+async function loadUserDropdowns() {
+  try {
+    const deptData = await api('/masters/departments');
+    const deptSel  = document.getElementById('uDept');
+    deptSel.innerHTML = '<option value="">— Select Department —</option>';
+    // Unique departments only
+    const uniqueDepts = [...new Map(deptData.data.map(d => [d.name, d])).values()];
+    uniqueDepts.forEach(d => {
+      deptSel.innerHTML += `<option value="${d.name}">${d.name}</option>`;
+    });
+  } catch(e) { console.error('loadUserDropdowns error:', e); }
+}
+
+function isProcessDept() {
+  const dept = document.getElementById('eqDept')?.value || '';
+  return dept.toLowerCase().includes('process');
+}
+
+function onEqDeptChange() {
+  const dept = document.getElementById('eqDept').value;
+  const isProcess     = dept && dept.toLowerCase().includes('process');
+
+  // Process — hourly entry toggle
+  const hourlyGroup = document.getElementById('hourlyEntryGroup');
+  hourlyGroup.style.display = isProcess ? 'block' : 'none';
+  if (!isProcess) document.getElementById('eqHourlyEntry').checked = false;
+
+  // Monitoring rows are available for all departments — no dept restriction
+  // Show optional hint on standard value inputs in existing param rows
+  document.querySelectorAll('.pStdInput').forEach(el => {
+    el.placeholder = isProcess ? 'Standard value (optional)' : 'Standard value';
+    el.style.display = ''; // always visible
+  });
+}
+
+function getSelectedPlant(role) {
+  if (role === 'operator' || role === 'maintenance') {
+    const p100 = document.getElementById('uPlant100').checked;
+    const p225 = document.getElementById('uPlant225').checked;
+    if (p100 && p225) return 'BOTH';
+    if (p100) return '100TPD';
+    if (p225) return '225TPD';
+    return null;
+  } else {
+    return document.getElementById('uPlantSelect').value || null;
+  }
+}
+
+function onRoleChange() {
+  const role = document.getElementById('uRole').value;
+  const deptGroup      = document.getElementById('uDeptGroup');
+  const plantCheckboxes = document.getElementById('uPlantCheckboxes');
+  const plantSelect     = document.getElementById('uPlantSelect');
+
+  if (role === 'operator' || role === 'maintenance') {
+    // Show dept + plant checkboxes
+    deptGroup.style.display       = 'block';
+    plantCheckboxes.style.display = 'flex';
+    plantSelect.style.display     = 'none';
+    plantSelect.value             = '';
+  } else {
+    // Hide dept, show single plant select (management/admin)
+    deptGroup.style.display       = 'none';
+    document.getElementById('uDept').value = '';
+    plantCheckboxes.style.display = 'none';
+    document.getElementById('uPlant100').checked = false;
+    document.getElementById('uPlant225').checked = false;
+    plantSelect.style.display     = 'block';
+  }
+}
+
+// Override openUserModal to load dropdowns
+const _origLoadUsers = typeof loadUsers === 'function' ? loadUsers : null;
+
+function openAddUser() {
+  document.getElementById('userId').value    = '';
+  document.getElementById('uUsername').value = '';
+  document.getElementById('uPassword').value = '';
+  document.getElementById('uFullName').value = '';
+  document.getElementById('uRole').value     = '';
+
+  document.getElementById('uDept').value     = '';
+  document.getElementById('uDeptGroup').style.display = 'none';
+  document.getElementById('uPlant100').checked = false;
+  document.getElementById('uPlant225').checked = false;
+  document.getElementById('uPlantSelect').value = '';
+  document.getElementById('userModalTitle').textContent = 'Add User';
+  loadUserDropdowns().then(() => {
+    document.getElementById('userModal').classList.add('open');
+  });
+}
+
+// ── EXPORT AUDIT LOG TO CSV ──────────────────────────────────────
+async function exportAuditCSV() {
+  try {
+    showToast('Preparing audit log export...', 'info');
+    
+    const data = await api('/admin/audit-log?limit=10000');
+    const logs = data.data || [];
+    
+    if (!logs.length) {
+      showToast('No audit log data to export', 'error');
+      return;
+    }
+    
+    // Define CSV headers
+    const headers = ['Time', 'User', 'Action', 'Table', 'Record ID', 'IP Address'];
+    
+    // Map data to rows
+    const rows = logs.map(log => [
+      formatDateTime(log.logged_at),
+      log.full_name || log.username || '—',
+      log.action || '—',
+      log.table_name || '—',
+      log.record_id || '—',
+      log.ip_address || '—'
+    ]);
+    
+    // Create CSV content
+    const csvContent = [headers, ...rows].map(row => 
+      row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
+    ).join('\n');
+    
+    // Download file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `audit_log_${new Date().toISOString().slice(0,19).replace(/:/g, '-')}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    
+    showToast(`✅ Exported ${logs.length} audit records to CSV`);
+  } catch(e) {
+    showToast('Export failed: ' + e.message, 'error');
+  }
+}
+
+// ── HELPER: Format date time ─────────────────────────────────────
+function formatDateTime(timestamp) {
+  if (!timestamp) return '—';
+  const date = new Date(timestamp);
+  return date.toLocaleString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+}
+
+init();
+</script>
+</body>
+</html>
