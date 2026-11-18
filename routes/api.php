@@ -54,6 +54,11 @@ $register = function (string $prefix = '') {
                 Route::delete('/equipment/{id}', [EquipmentController::class, 'destroy']);
             });
 
+            // Get all operating logs of particular equipment
+            Route::get(
+                '/equipment/{equipment}/operating-logs',
+                [EquipmentOperatingLogController::class, 'history']
+            )->middleware('role:operator,admin');
 
             // Equipment Operating Logs
             Route::middleware('role:operator,admin')->group(function () {

@@ -41,6 +41,68 @@
   }
   .job-extra-fields.show { display:block; }
   @keyframes fadeIn { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
+
+
+  /* 3 dot button show*/
+.eq-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.eq-menu-wrapper {
+    position: relative;
+    margin-left: auto;
+}
+
+.eq-menu-btn {
+    width: 34px;
+    height: 34px;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    border-radius: 7px;
+    cursor: pointer;
+    font-size: 22px;
+    color: #334155;
+}
+
+.eq-menu-btn:hover {
+    background: #eff6ff;
+}
+
+.eq-dropdown {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: 38px;
+    min-width: 130px;
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0,0,0,.15);
+    z-index: 100;
+    overflow: hidden;
+}
+
+.eq-dropdown.show {
+    display: block;
+}
+
+.eq-dropdown button {
+    width: 100%;
+    padding: 10px 12px;
+    border: none;
+    background: white;
+    text-align: left;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.eq-dropdown button:hover {
+    background: #eff6ff;
+}
+  /* 3 dot button show*/
+
 </style>
 </head>
 <body>
@@ -180,7 +242,8 @@
 
 <!-- RPM AND LOAD SPEED LOGS CREATE POPUP -->
 
-  <!-- RUNNING Operating Log Modal -->
+
+<!-- EQUIPMENT OPERATING LOG MODAL -->
 <div class="modal-overlay" id="operatingLogModal">
     <div class="modal">
 
@@ -197,63 +260,42 @@
 
         <div class="modal-body">
 
+            <!-- Equipment Details -->
             <div style="margin-bottom:1rem;padding:.75rem;background:#eff6ff;border-radius:8px">
                 <strong id="operatingEqName"></strong>
+
                 <div id="operatingEqCode"
                      style="font-size:.8rem;color:#64748b"></div>
+
                 <div style="margin-top:.4rem">
                     Shift: <strong id="operatingShift"></strong>
                 </div>
             </div>
 
+            <!-- RPM SPEED -->
             <div class="form-group">
-                <label class="form-label">Standard RPM</label>
-                <input type="number"
-                       class="form-control"
-                       id="standardRpm"
-                       min="0"
-                       step="0.01"
-                       placeholder="Enter standard RPM">
-            </div>
+                <label class="form-label">RPM Speed *</label>
 
-            <div class="form-group">
-                <label class="form-label">Actual RPM *</label>
                 <input type="number"
                        class="form-control"
                        id="actualRpm"
                        min="0"
                        step="0.01"
-                       placeholder="Enter actual RPM"
+                       placeholder="Enter RPM speed"
                        required>
             </div>
 
+            <!-- LOAD SPEED -->
             <div class="form-group">
-                <label class="form-label">Standard Load</label>
-                <input type="number"
-                       class="form-control"
-                       id="standardLoad"
-                       min="0"
-                       step="0.01"
-                       placeholder="Enter standard load">
-            </div>
+                <label class="form-label">Load Speed *</label>
 
-            <div class="form-group">
-                <label class="form-label">Actual Load *</label>
                 <input type="number"
                        class="form-control"
                        id="actualLoad"
                        min="0"
                        step="0.01"
-                       placeholder="Enter actual load"
+                       placeholder="Enter Load speed"
                        required>
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">Remarks</label>
-                <textarea class="form-control"
-                          id="operatingRemarks"
-                          rows="2"
-                          placeholder="Enter remarks (optional)"></textarea>
             </div>
 
             <p style="font-size:.75rem;color:#64748b">
@@ -263,6 +305,7 @@
         </div>
 
         <div class="modal-footer">
+
             <button class="btn btn-outline"
                     onclick="closeOperatingLogModal()">
                 Cancel
@@ -271,14 +314,63 @@
             <button class="btn btn-primary"
                     id="saveOperatingBtn"
                     onclick="saveOperatingLog()">
-                Save & Mark RUNNING
+                Save Operating Log
             </button>
+
         </div>
 
     </div>
 </div>
 
+
 <!-- RPM AND LOAD SPEED LOGS CREATE POPUP -->
+
+<!-- EQUIPMENT OPERATING LOG HISTORY MODAL -->
+<div class="modal-overlay" id="operatingHistoryModal">
+    <div class="modal" style="width:95%;max-width:950px;">
+
+        <div class="modal-header">
+            <div class="modal-title">
+                📋 Equipment Operating Log History
+            </div>
+
+            <button class="modal-close"
+                    onclick="closeOperatingHistoryModal()">
+                ✕
+            </button>
+        </div>
+
+        <div class="modal-body">
+
+            <div style="padding:12px;background:#eff6ff;border-radius:8px;margin-bottom:15px;">
+                <strong id="historyEqName"></strong>
+                <div id="historyEqCode"
+                     style="font-size:13px;color:#64748b;margin-top:4px;">
+                </div>
+                <div id="historyLogCount"
+                     style="font-size:13px;color:#1e40af;margin-top:6px;">
+                </div>
+            </div>
+
+            <div id="operatingHistoryContent"
+                 style="overflow-x:auto;">
+
+                <div class="loading">Loading operating logs...</div>
+
+            </div>
+
+        </div>
+
+        <div class="modal-footer">
+            <button class="btn btn-outline"
+                    onclick="closeOperatingHistoryModal()">
+                Close
+            </button>
+        </div>
+
+    </div>
+</div>
+<!-- END EQUIPMENT OPERATING LOG HISTORY MODAL -->
 
 <script src="../shared/cmms.js"></script>
 <script>
@@ -425,31 +517,84 @@ function renderEquipment() {
       if (!ownDept) {
         html += `
         <div class="eq-card ${running ? 'running' : 'stopped'}" id="eq-${eq.id}"
-          style="pointer-events:none;user-select:none;position:relative">
+  style="user-select:none;position:relative;overflow:visible">
           <!-- Invisible click blocker -->
-          <div style="position:absolute;inset:0;z-index:10;border-radius:inherit"></div>
           <div style="display:flex;justify-content:space-between;align-items:flex-start">
             <div>
               <div class="eq-name">${eq.name}</div>
               <div class="eq-meta">${eq.code} · ${eq.location || eq.department}</div>
               ${isElectMech ? `
               <div style="margin-top:.55rem;padding-top:.45rem;border-top:1px dashed #e2e8f0;font-size:.74rem;line-height:1.45;color:#475569;">
-                <div>RPM &nbsp; Std: <strong>${eq.standard_rpm ?? '—'}</strong> &nbsp; | &nbsp; Running: <strong>${eq.actual_rpm ?? '—'}</strong></div>
-                <div style="margin-top:.12rem">Load &nbsp; Std: <strong>${eq.standard_load ?? '—'}</strong> &nbsp; | &nbsp; Running: <strong>${eq.actual_load ?? '—'}</strong></div>
-                <div style="margin-top:.4rem;color:#64748b;">Last Job: ${eq.last_job_title || 'No history'} ${eq.last_job_closed_at ? '· ' + fmtDate(eq.last_job_closed_at) : ''}</div>
+                <div>
+                    RPM &nbsp; Std: <strong>${eq.standard_rpm ?? '—'}</strong>
+                    &nbsp; | &nbsp; Running:
+                    <strong>${eq.latest_actual_rpm ?? '—'}</strong>
+                </div>
+
+                <div style="margin-top:.12rem">
+                    Load &nbsp; Std: <strong>${eq.standard_load ?? '—'}</strong>
+                    &nbsp; | &nbsp; Running:
+                    <strong>${eq.latest_actual_load ?? '—'}</strong>
+                </div>
+
+                <div style="margin-top:.4rem;color:#64748b;">
+                    Last Job: ${eq.last_job_title || 'No history'}
+                    ${eq.last_job_closed_at ? '· ' + fmtDate(eq.last_job_closed_at) : ''}
+                </div>
+
+                <div style="margin-top:.3rem;color:#0369a1;">
+                    Last Log:
+                    ${eq.latest_logged_at ? fmtDate(eq.latest_logged_at) : 'No logs'}
+                    ${eq.latest_shift ? '· Shift ' + eq.latest_shift : ''}
+                </div>
               </div>` : ''}
             </div>
             <span class="badge badge-${running ? 'running' : 'stopped'}">${eq.current_status}</span>
           </div>
           ${!running ? `<div class="downtime-timer">⏱ Down: ${fmtDuration(downMins)} ${eq.open_bd_number ? '· ' + eq.open_bd_number : ''}</div>` : ''}
           ${running && eq.active_job_number ? `<div style="margin:.4rem 0;padding:.4rem .6rem;background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;font-size:.75rem;color:#92400e;font-weight:600">⚠️ Active Job: ${eq.active_job_number} (${eq.active_job_status}) — Close job before marking RUNNING again</div>` : ''}
-          <div class="eq-actions" style="margin-top:.75rem">
-            ${isProcess
-              ? `<button class="btn-running" style="width:100%;background:#0369a1;border-color:#0369a1">📡 Monitoring</button>`
-              : `<button class="btn-running" ${running ? 'disabled' : ''}>✅ RUNNING</button>
-                 <button class="btn-stopped" ${!running ? 'disabled' : ''}>🔴 STOPPED</button>`
-            }
-          </div>
+<div class="eq-actions" style="margin-top:.75rem">
+
+    ${isProcess
+      ? `<button class="btn-running"
+           style="width:100%;background:#0369a1;border-color:#0369a1">
+           📡 Monitoring
+         </button>`
+      : `<button class="btn-running" ${running ? 'disabled' : ''}>
+           ✅ RUNNING
+         </button>
+         <button class="btn-stopped" ${!running ? 'disabled' : ''}>
+           🔴 STOPPED
+         </button>`
+    }
+
+    <!-- THREE DOT MENU -->
+<!-- THREE DOT MENU -->
+<div class="eq-menu-wrapper">
+
+    <button type="button"
+        class="eq-menu-btn"
+        onclick="toggleEquipmentMenu(event, ${eq.id})">
+        ⋮
+    </button>
+
+    <div class="eq-dropdown" id="eq-menu-${eq.id}">
+
+        <button type="button"
+            onclick="editEquipment(${eq.id})">
+            ✏️ Edit
+        </button>
+
+        <button type="button"
+            onclick="viewEquipment(${eq.id})">
+            👁 View
+        </button>
+
+    </div>
+
+</div>
+
+</div>
         </div>`;
 
       // ── Process dept own card ───────────────────────────────
@@ -481,21 +626,78 @@ function renderEquipment() {
               <div class="eq-meta">${eq.code} · ${eq.location || eq.department}</div>
               ${isElectMech ? `
               <div style="margin-top:.55rem;padding-top:.45rem;border-top:1px dashed #e2e8f0;font-size:.74rem;line-height:1.45;color:#475569;">
-                <div>RPM &nbsp; Std: <strong>${eq.standard_rpm ?? '—'}</strong> &nbsp; | &nbsp; Running: <strong>${eq.actual_rpm ?? '—'}</strong></div>
-                <div style="margin-top:.12rem">Load &nbsp; Std: <strong>${eq.standard_load ?? '—'}</strong> &nbsp; | &nbsp; Running: <strong>${eq.actual_load ?? '—'}</strong></div>
-                <div style="margin-top:.4rem;color:#64748b;">Last Job: ${eq.last_job_title || 'No history'} ${eq.last_job_closed_at ? '· ' + fmtDate(eq.last_job_closed_at) : ''}</div>
+                <div>
+                    RPM &nbsp; Std: <strong>${eq.standard_rpm ?? '—'}</strong>
+                    &nbsp; | &nbsp; Running:
+                    <strong>${eq.latest_actual_rpm ?? '—'}</strong>
+                </div>
+
+                <div style="margin-top:.12rem">
+                    Load &nbsp; Std: <strong>${eq.standard_load ?? '—'}</strong>
+                    &nbsp; | &nbsp; Running:
+                    <strong>${eq.latest_actual_load ?? '—'}</strong>
+                </div>
+
+                <div style="margin-top:.4rem;color:#64748b;">
+                    Last Job: ${eq.last_job_title || 'No history'}
+                    ${eq.last_job_closed_at ? '· ' + fmtDate(eq.last_job_closed_at) : ''}
+                </div>
+
+                <div style="margin-top:.3rem;color:#0369a1;">
+                    Last Log:
+                    ${eq.latest_logged_at ? fmtDate(eq.latest_logged_at) : 'No logs'}
+                    ${eq.latest_shift ? '· Shift ' + eq.latest_shift : ''}
+                </div>
               </div>` : ''}
             </div>
             <span class="badge badge-${running ? 'running' : 'stopped'}">${eq.current_status}</span>
           </div>
           ${!running ? `<div class="downtime-timer">⏱ Down: ${fmtDuration(downMins)} ${eq.open_bd_number ? '· ' + eq.open_bd_number : ''}</div>` : ''}
           ${running && eq.active_job_number ? `<div style="margin:.4rem 0;padding:.4rem .6rem;background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;font-size:.75rem;color:#92400e;font-weight:600">⚠️ Active Job: ${eq.active_job_number} (${eq.active_job_status}) — Close job before marking RUNNING again</div>` : ''}
-          <div class="eq-actions" style="margin-top:.75rem">
-            <button class="btn-running" onclick="logStatus(${eq.id}, 'RUNNING', '${escHtml(eq.name)}')"
-              ${running ? 'disabled' : ''}>✅ RUNNING</button>
-            <button class="btn-stopped" onclick="openStopModal(${eq.id}, '${escHtml(eq.name)}', '${eq.code}')"
-              ${!running ? 'disabled' : ''}>🔴 STOPPED</button>
-          </div>
+          
+<div class="eq-actions" style="margin-top:.75rem">
+
+    <!-- EXISTING RUNNING BUTTON -->
+    <button class="btn-running"
+        onclick="logStatus(${eq.id}, 'RUNNING', '${escHtml(eq.name)}')"
+        ${running ? 'disabled' : ''}>
+        ✅ RUNNING
+    </button>
+
+    <!-- EXISTING STOPPED BUTTON -->
+    <button class="btn-stopped"
+        onclick="openStopModal(${eq.id}, '${escHtml(eq.name)}', '${eq.code}')"
+        ${!running ? 'disabled' : ''}>
+        🔴 STOPPED
+    </button>
+
+    <!-- THREE DOT MENU -->
+    <div class="eq-menu-wrapper">
+
+        <button type="button"
+            class="eq-menu-btn"
+            onclick="toggleEquipmentMenu(event, ${eq.id})">
+            ⋮
+        </button>
+
+        <div class="eq-dropdown" id="eq-menu-${eq.id}">
+
+            <button type="button"
+                onclick="editEquipment(${eq.id})">
+                ✏️ Edit
+            </button>
+
+            <button type="button"
+                onclick="viewEquipment(${eq.id})">
+                👁 View
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
         </div>`;
       }
     });
@@ -697,6 +899,322 @@ function logout() {
 }
 
 init();
+
+
+function toggleEquipmentMenu(event, eqId) {
+    event.stopPropagation();
+
+    document.querySelectorAll('.eq-dropdown').forEach(menu => {
+        if (menu.id !== `eq-menu-${eqId}`) {
+            menu.classList.remove('show');
+        }
+    });
+
+    const menu = document.getElementById(`eq-menu-${eqId}`);
+
+    if (menu) {
+        menu.classList.toggle('show');
+    }
+}
+
+document.addEventListener('click', function () {
+    document.querySelectorAll('.eq-dropdown').forEach(menu => {
+        menu.classList.remove('show');
+    });
+});
+
+// Edit RPM and Load details
+
+function editEquipment(eqId) {
+    const eq = allEquipment.find(
+        item => Number(item.id) === Number(eqId)
+    );
+
+    if (!eq) {
+        showToast('Equipment not found', 'error');
+        return;
+    }
+
+    // Close the three-dot menu
+    document.querySelectorAll('.eq-dropdown').forEach(menu => {
+        menu.classList.remove('show');
+    });
+
+    // Open existing RPM and Load popup
+    openOperatingLogModal(eqId);
+}
+
+
+
+function openOperatingLogModal(eqId) {
+
+    // Find selected equipment
+    const eq = allEquipment.find(
+        item => Number(item.id) === Number(eqId)
+    );
+
+    if (!eq) {
+        showToast('Equipment not found', 'error');
+        return;
+    }
+
+    // Store selected equipment
+    pendingOperatingEquipment = eq;
+
+    // Equipment details
+    document.getElementById('operatingEqName').textContent =
+        eq.name || '';
+
+    document.getElementById('operatingEqCode').textContent =
+        `${eq.code || ''} · ${eq.department || ''}`;
+
+    // Current shift
+    document.getElementById('operatingShift').textContent =
+        currentShift || '';
+
+    // Reset RPM Speed input
+    document.getElementById('actualRpm').value = '';
+
+    // Reset Load Speed input
+    document.getElementById('actualLoad').value = '';
+
+    // Reset remarks only if the field exists
+    const remarksField = document.getElementById('operatingRemarks');
+
+    if (remarksField) {
+        remarksField.value = '';
+    }
+
+    // Reset Save button
+    const saveBtn = document.getElementById('saveOperatingBtn');
+
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Save Operating Log';
+
+    // Open popup
+    document.getElementById('operatingLogModal').classList.add('open');
+}
+
+
+function closeOperatingLogModal() {
+    document.getElementById('operatingLogModal').classList.remove('open');
+    pendingOperatingEquipment = null;
+}
+
+
+
+
+async function saveOperatingLog() {
+
+    if (!pendingOperatingEquipment) {
+        showToast('Please select equipment', 'error');
+        return;
+    }
+
+    const eq = pendingOperatingEquipment;
+
+    // Only two inputs
+    const actualRpm = document.getElementById('actualRpm').value;
+    const actualLoad = document.getElementById('actualLoad').value;
+
+    const remarksField = document.getElementById('operatingRemarks');
+    const remarks = remarksField ? remarksField.value.trim() : '';
+
+    // Validation
+    if (actualRpm === '' || actualLoad === '') {
+        showToast('Please enter RPM Speed and Load Speed', 'error');
+        return;
+    }
+
+    if (
+        !Number.isFinite(Number(actualRpm)) ||
+        !Number.isFinite(Number(actualLoad)) ||
+        Number(actualRpm) < 0 ||
+        Number(actualLoad) < 0
+    ) {
+        showToast('Please enter valid RPM and Load values', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('saveOperatingBtn');
+
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    try {
+
+        const result = await api('/equipment-operating-logs', {
+            method: 'POST',
+            body: JSON.stringify({
+                equipment_id: eq.id,
+                actual_rpm: Number(actualRpm),
+                actual_load: Number(actualLoad),
+                shift: currentShift,
+                remarks: remarks || null
+            })
+        });
+
+        showToast(
+            result.message || 'Operating log saved successfully',
+            'success'
+        );
+
+        closeOperatingLogModal();
+
+        await loadEquipment();
+
+    } catch (error) {
+
+        console.error('Operating Log Save Error:', error);
+
+        showToast(
+            error.message || 'Unable to save operating log',
+            'error'
+        );
+
+    } finally {
+
+        btn.disabled = false;
+        btn.textContent = 'Save Operating Log';
+    }
+}
+
+
+
+
+// View Equipment details
+// ==========================================
+// VIEW EQUIPMENT OPERATING LOG HISTORY
+// ==========================================
+
+async function viewEquipment(eqId) {
+
+    const eq = allEquipment.find(
+        item => Number(item.id) === Number(eqId)
+    );
+
+    if (!eq) {
+        showToast('Equipment not found', 'error');
+        return;
+    }
+
+    // Close dropdown
+    document.querySelectorAll('.eq-dropdown').forEach(menu => {
+        menu.classList.remove('show');
+    });
+
+    // Equipment details
+    document.getElementById('historyEqName').textContent =
+        eq.name || '';
+
+    document.getElementById('historyEqCode').textContent =
+        `${eq.code || ''} · ${eq.department || ''}`;
+
+    document.getElementById('historyLogCount').textContent =
+        'Loading logs...';
+
+    document.getElementById('operatingHistoryContent').innerHTML = `
+        <div class="loading">Loading operating logs...</div>
+    `;
+
+    // Open popup
+    document.getElementById('operatingHistoryModal')
+        .classList.add('open');
+
+    try {
+
+        const response = await api(
+            `/equipment/${eqId}/operating-logs`
+        );
+
+        const logs = Array.isArray(response.data)
+            ? response.data
+            : [];
+
+        document.getElementById('historyLogCount').textContent =
+            `Total Logs: ${logs.length}`;
+
+        if (logs.length === 0) {
+            document.getElementById('operatingHistoryContent').innerHTML = `
+                <div class="empty-state">
+                    No operating logs found.
+                </div>
+            `;
+            return;
+        }
+
+        document.getElementById('operatingHistoryContent').innerHTML = `
+            <table style="width:100%;border-collapse:collapse;min-width:750px;">
+                <thead>
+                    <tr style="background:#f1f5f9;text-align:left;">
+                        <th style="padding:10px;">#</th>
+                        <th style="padding:10px;">RPM Speed</th>
+                        <th style="padding:10px;">Load Speed</th>
+                        <th style="padding:10px;">Shift</th>
+                        <th style="padding:10px;">Logged By</th>
+                        <th style="padding:10px;">Date & Time</th>
+                        <th style="padding:10px;">Remarks</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${logs.map((log, index) => `
+                        <tr>
+                            <td style="padding:10px;border-top:1px solid #e2e8f0;">
+                                ${index + 1}
+                            </td>
+                            <td style="padding:10px;border-top:1px solid #e2e8f0;">
+                                ${escapeHistoryHtml(log.actual_rpm)}
+                            </td>
+                            <td style="padding:10px;border-top:1px solid #e2e8f0;">
+                                ${escapeHistoryHtml(log.actual_load)}
+                            </td>
+                            <td style="padding:10px;border-top:1px solid #e2e8f0;">
+                                ${escapeHistoryHtml(log.shift)}
+                            </td>
+                            <td style="padding:10px;border-top:1px solid #e2e8f0;">
+                                ${escapeHistoryHtml(log.logged_by_name || log.logged_by || '—')}
+                            </td>
+                            <td style="padding:10px;border-top:1px solid #e2e8f0;">
+                                ${escapeHistoryHtml(log.logged_at || '—')}
+                            </td>
+                            <td style="padding:10px;border-top:1px solid #e2e8f0;">
+                                ${escapeHistoryHtml(log.remarks || '—')}
+                            </td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        `;
+
+    } catch (error) {
+
+        console.error('Operating History Error:', error);
+
+        document.getElementById('operatingHistoryContent').innerHTML = `
+            <div style="color:#dc2626;padding:12px;">
+                Unable to load operating logs:
+                ${escapeHistoryHtml(error.message)}
+            </div>
+        `;
+    }
+}
+
+
+// HTML escape helper
+function escapeHistoryHtml(value) {
+    const div = document.createElement('div');
+    div.textContent = value ?? '';
+    return div.innerHTML;
+}
+
+
+// Close history popup
+function closeOperatingHistoryModal() {
+    document.getElementById('operatingHistoryModal')
+        .classList.remove('open');
+}
+
+
 </script>
 </body>
 </html>

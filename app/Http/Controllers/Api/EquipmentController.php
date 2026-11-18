@@ -104,7 +104,7 @@ class EquipmentController extends Controller
         return $equipment;
     }
 
-    public function index(Request $request)
+    public function index_backup(Request $request)
     {
         $query = DB::table('equipment')->where('active', 1);
         if ($request->filled('plant')) {
@@ -119,6 +119,83 @@ class EquipmentController extends Controller
 
         return response()->json(['success' => true, 'data' => $rows]);
     }
+
+
+    
+    public function index(Request $request)
+    {
+        // Get latest operating log ID for each equipment
+        $latestLogs = DB::table('equipment_operating_logs')
+            ->select(
+                'equipment_id',
+                DB::raw('MAX(id) as latest_id')
+            )
+            ->groupBy('equipment_id');
+
+        // Main equipment query
+        $query = DB::table('equipment as e')
+            ->leftJoinSub(
+                $latestLogs,
+                'latest_logs',
+                function ($join) {
+                    $join->on('e.id', '=', 'latest_logs.equipment_id');
+                }
+            )
+            ->leftJoin(
+                'equipment_operating_logs as operating_log',
+                'operating_log.id',
+                '=',
+                'latest_logs.latest_id'
+            )
+            ->select(
+                'e.*',
+                'operating_log.actual_rpm as latest_actual_rpm',
+                'operating_log.actual_load as latest_actual_load',
+                'operating_log.logged_at as latest_logged_at',
+                'operating_log.shift as latest_shift'
+            )
+            ->where('e.active', 1);
+
+        // Existing Plant Filter
+        if ($request->filled('plant')) {
+            $query->where('e.plant', $request->plant);
+        }
+
+        // Existing Department Filter
+        if ($request->filled('department')) {
+            $query->where('e.department', $request->department);
+        }
+
+        // Get equipment and enrich existing data
+        $rows = $query
+            ->orderBy('e.department')
+            ->orderBy('e.name')
+            ->get()
+            ->map(function ($equipment) use ($request) {
+
+                $enriched = $this->enrich(
+                    $equipment,
+                    $request->shift ?: 'A'
+                );
+
+                // Preserve existing enriched data and append latest log data
+                return (object) array_merge(
+                    (array) $enriched,
+                    [
+                        'latest_actual_rpm'  => $equipment->latest_actual_rpm,
+                        'latest_actual_load' => $equipment->latest_actual_load,
+                        'latest_logged_at'   => $equipment->latest_logged_at,
+                        'latest_shift'       => $equipment->latest_shift,
+                    ]
+                );
+            });
+
+        return response()->json([
+            'success' => true,
+            'data' => $rows
+        ]);
+    }
+
 
     public function show($id)
     {
