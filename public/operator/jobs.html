@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CMMS — Job Management</title>
+<link rel="stylesheet" href="../shared/style.css">
+<style>
+  .job-card {
+    background:#fff;border-radius:12px;border:1px solid #e2e8f0;
+    padding:1rem 1.25rem;margin-bottom:.75rem;
+    box-shadow:0 1px 3px rgba(0,0,0,.06);transition:box-shadow .15s;
+  }
+  .job-card:hover { box-shadow:0 4px 12px rgba(0,0,0,.1); }
+  .job-card.priority-high   { border-left:4px solid #ef4444; }
+  .job-card.priority-medium { border-left:4px solid #f97316; }
+  .job-card.priority-low    { border-left:4px solid #22c55e; }
+
+  .job-header { display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem;flex-wrap:wrap; }
+  .job-number { font-size:.78rem;color:#94a3b8;font-weight:600;font-family:monospace; }
+  .job-title  { font-weight:700;font-size:.95rem;margin:.2rem 0; }
+  .job-meta   { font-size:.8rem;color:#64748b;display:flex;gap:1rem;flex-wrap:wrap;margin-top:.3rem; }
+
+  .status-badge { padding:.3rem .8rem;border-radius:20px;font-size:.75rem;font-weight:700;white-space:nowrap; }
+  .status-OPEN        { background:#fef3c7;color:#92400e; }
+  .status-ASSIGNED    { background:#dbeafe;color:#1e40af; }
+  .status-IN-PROGRESS { background:#ede9fe;color:#5b21b6; }
+  .status-COMPLETED   { background:#dcfce7;color:#166534; }
+  .status-CLOSED      { background:#f1f5f9;color:#475569; }
+  .status-REASSIGNED  { background:#fff7ed;color:#c2410c;border:1px solid #fed7aa; }
+
+  .filter-bar { display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin-bottom:1rem; }
+  .filter-btn {
+    padding:.35rem .85rem;border-radius:20px;border:2px solid #e2e8f0;
+    background:#fff;font-size:.8rem;font-weight:600;cursor:pointer;transition:all .15s;
+  }
+  .filter-btn.active { border-color:#1e40af;background:#dbeafe;color:#1e40af; }
+
+  .job-actions { display:flex;gap:.5rem;margin-top:.75rem;flex-wrap:wrap;align-items:center; }
+  .empty-jobs  { text-align:center;padding:3rem;color:#94a3b8; }
+
+  .source-tag {
+    display:inline-flex;align-items:center;gap:.3rem;
+    padding:.15rem .55rem;border-radius:10px;font-size:.72rem;font-weight:600;
+    background:#fef9c3;color:#854d0e;border:1px solid #fde68a;
+  }
+
+  /* ── Multi-assign dept tracking table ── */
+  .dept-track-table {
+    width:100%;border-collapse:collapse;margin-top:.75rem;font-size:.8rem;
+    border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;
+  }
+  .dept-track-table th {
+    background:#1e3a5f;color:#fff;padding:.4rem .75rem;text-align:left;font-size:.75rem;
+  }
+  .dept-track-table td {
+    padding:.45rem .75rem;border-bottom:1px solid #f1f5f9;vertical-align:middle;
+  }
+  .dept-track-table tr:last-child td { border-bottom:none; }
+  .dept-track-table tr:nth-child(even) td { background:#f8fafc; }
+
+  .dept-status-pill {
+    display:inline-block;padding:.15rem .5rem;border-radius:10px;
+    font-size:.7rem;font-weight:700;
+  }
+  .pill-ASSIGNED    { background:#dbeafe;color:#1e40af; }
+  .pill-IN-PROGRESS { background:#ede9fe;color:#5b21b6; }
+  .pill-COMPLETED   { background:#dcfce7;color:#166534; }
+
+  /* Checkbox list for dept multi-select */
+  .dept-check-list {
+    border:1px solid #e2e8f0;border-radius:8px;padding:.5rem .75rem;
+    max-height:180px;overflow-y:auto;background:#f8fafc;
+  }
+  .dept-check-list label {
+    display:flex;align-items:center;gap:.5rem;
+    padding:.3rem .2rem;cursor:pointer;font-size:.88rem;
+  }
+  .dept-check-list input[type=checkbox] { width:16px;height:16px;cursor:pointer; }
+  .multi-note {
+    display:none;margin-top:.4rem;font-size:.76rem;color:#7c3aed;
+    background:#f5f3ff;padding:.4rem .7rem;border-radius:6px;border:1px solid #ddd6fe;
+  }
+</style>
+</head>
+<body>
+
+<header class="cmms-header">
+  <div class="logo">🏭 Plant CMMS <span>Job Management</span></div>
+  <div style="display:flex;align-items:center;gap:.75rem">
+    <div class="user-info" id="headerUser"></div>
+    <button class="btn-logout" onclick="goBack()">← Back</button>
+    <button class="btn-logout" onclick="logout()">Logout</button>
+  </div>
+</header>
+
+<div class="page">
+
+  <!-- Top bar -->
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.75rem;margin-bottom:1rem">
+    <div class="page-title" style="margin:0">🔧 Jobs
+      <span id="roleViewLabel" style="font-size:.78rem;font-weight:400;color:#94a3b8;margin-left:.5rem"></span>
+    </div>
+    <div style="display:flex;gap:.5rem;align-items:center;">
+      <button class="btn btn-primary btn-sm" onclick="loadJobs()">🔄 Refresh</button>
+      <button class="btn btn-primary" id="raiseJobBtn" onclick="openRaiseModal()" style="display:none">+ Raise New Job</button>
+    </div>
+  </div>
+
+  <!-- Summary cards -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.75rem;margin-bottom:1rem">
+    <div class="card" style="padding:.75rem;text-align:center;border-top:3px solid #92400e">
+      <div style="font-size:1.5rem;font-weight:800;color:#92400e" id="countOpen">—</div>
+      <div style="font-size:.75rem;color:#64748b">OPEN</div>
+    </div>
+    <div class="card" style="padding:.75rem;text-align:center;border-top:3px solid #1e40af">
+      <div style="font-size:1.5rem;font-weight:800;color:#1e40af" id="countAssigned">—</div>
+      <div style="font-size:.75rem;color:#64748b">ASSIGNED</div>
+    </div>
+    <div class="card" style="padding:.75rem;text-align:center;border-top:3px solid #5b21b6">
+      <div style="font-size:1.5rem;font-weight:800;color:#5b21b6" id="countInProgress">—</div>
+      <div style="font-size:.75rem;color:#64748b">IN PROGRESS</div>
+    </div>
+    <div class="card" style="padding:.75rem;text-align:center;border-top:3px solid #166534">
+      <div style="font-size:1.5rem;font-weight:800;color:#166534" id="countCompleted">—</div>
+      <div style="font-size:.75rem;color:#64748b">COMPLETED</div>
+    </div>
+    <div class="card" style="padding:.75rem;text-align:center;border-top:3px solid #475569">
+      <div style="font-size:1.5rem;font-weight:800;color:#475569" id="countClosed">—</div>
+      <div style="font-size:.75rem;color:#64748b">CLOSED</div>
+    </div>
+  </div>
+
+  <!-- Filter bar -->
+  <div class="filter-bar">
+    <span style="font-size:.82rem;color:#64748b;font-weight:600">Filter:</span>
+    <button class="filter-btn active" data-status="ALL"         onclick="filterJobs(this)">All</button>
+    <button class="filter-btn" data-status="OPEN"              onclick="filterJobs(this)">Open</button>
+    <button class="filter-btn" data-status="ASSIGNED"          onclick="filterJobs(this)">Assigned</button>
+    <button class="filter-btn" data-status="IN PROGRESS"       onclick="filterJobs(this)">In Progress</button>
+    <button class="filter-btn" data-status="COMPLETED"         onclick="filterJobs(this)">Completed</button>
+    <button class="filter-btn" data-status="CLOSED"            onclick="filterJobs(this)">Closed</button>
+  </div>
+
+  <!-- Jobs list -->
+  <div id="jobsList"><div class="loading">Loading jobs...</div></div>
+
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     RAISE JOB MODAL
+     ══════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="raiseModal">
+  <div class="modal" style="max-width:580px">
+    <div class="modal-header">
+      <div class="modal-title">🔧 Raise New Job</div>
+      <button class="modal-close" onclick="closeRaiseModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Job Title *</label>
+        <input class="form-control" id="jTitle" placeholder="e.g. Gearbox oil leakage in Ball Mill #1">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description</label>
+        <textarea class="form-control" id="jDesc" rows="2" placeholder="Describe the issue..."></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Equipment</label>
+        <select class="form-control" id="jEquipment">
+          <option value="">— Select Equipment —</option>
+        </select>
+      </div>
+
+      <!-- ── Multi-dept assignment ── -->
+      <div class="form-group">
+        <label class="form-label">Assign to Department(s) *
+          <span style="font-size:.75rem;color:#64748b;font-weight:400"> — select one or more</span>
+        </label>
+        <div class="dept-check-list" id="raiseDeptChecks">
+          <div style="color:#94a3b8;font-size:.85rem">Loading departments...</div>
+        </div>
+        <div class="multi-note" id="raiseMultiNote">
+          ⚡ Multi-department — each dept tracks independently. Job closes only when ALL complete.
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Remarks</label>
+        <textarea class="form-control" id="jRemarks" rows="2" placeholder="Any additional remarks..."></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">📸 Photos (optional, max 5)</label>
+        <input type="file" id="jPhotos" accept="image/*" multiple style="display:none" onchange="previewJobPhotos(this)">
+        <button type="button" class="btn btn-outline" style="width:100%;border-style:dashed" onclick="document.getElementById('jPhotos').click()">
+          📷 Click to attach photos
+        </button>
+        <div id="jPhotoPreview" style="display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.5rem"></div>
+        <div style="font-size:.75rem;color:#94a3b8;margin-top:.25rem">Accepted: JPG, PNG, WEBP · Max 10MB each</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeRaiseModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveJob()">🔧 Raise Job</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     CLOSE JOB MODAL (Shift-in-Charge)
+     ══════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="closeModal">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <div class="modal-title">✅ Close Job</div>
+      <button class="modal-close" onclick="closeCloseModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="clJobId">
+      <div style="background:#f8fafc;border-radius:8px;padding:.85rem;margin-bottom:1rem;border:1px solid #e2e8f0">
+        <strong id="clJobTitle" style="font-size:.92rem"></strong>
+        <div id="clJobNumber" style="font-size:.75rem;color:#94a3b8;font-family:monospace;margin-top:.2rem"></div>
+      </div>
+
+      <!-- Dept tracking table shown for multi-assign -->
+      <div id="clDeptTable" style="display:none;margin-bottom:1rem">
+        <div style="font-size:.82rem;color:#475569;margin-bottom:.4rem;font-weight:600">Department Status:</div>
+        <table class="dept-track-table">
+          <thead><tr><th>Department</th><th>Status</th><th>Completed At</th></tr></thead>
+          <tbody id="clDeptRows"></tbody>
+        </table>
+        <div id="clPendingWarn" style="display:none;margin-top:.5rem;padding:.5rem .75rem;background:#fef3c7;border-radius:6px;font-size:.8rem;color:#92400e;font-weight:600"></div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Closure Remarks</label>
+        <textarea class="form-control" id="clRemarks" rows="2" placeholder="Work completion summary..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeCloseModal()">Cancel</button>
+      <button class="btn btn-primary" id="clConfirmBtn" style="background:#166534;border-color:#166534" onclick="confirmClose()">✅ Close Job</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     STATUS MODAL (kept for non-multi single jobs)
+     ══════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="statusModal">
+  <div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <div class="modal-title">✏️ Update Job Status</div>
+      <button class="modal-close" onclick="closeStatusModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="sJobId">
+      <div style="margin-bottom:1rem;padding:.75rem;background:#f8fafc;border-radius:8px">
+        <strong id="sJobTitle" style="font-size:.95rem"></strong>
+        <div id="sJobNumber" style="font-size:.78rem;color:#94a3b8;font-family:monospace;margin-top:.2rem"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">New Status *</label>
+        <select class="form-control" id="sStatus">
+          <option value="">— Select Status —</option>
+          <option value="IN PROGRESS">IN PROGRESS</option>
+          <option value="COMPLETED">COMPLETED</option>
+          <option value="CLOSED">CLOSED</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Remarks</label>
+        <textarea class="form-control" id="sRemarks" rows="2" placeholder="Add update remarks..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeStatusModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="updateJobStatus()">✅ Update</button>
+    </div>
+  </div>
+</div>
+
+<script src="../shared/cmms.js"></script>
+<script>
+let user, allJobs = [], currentFilter = 'ALL', allDepartments = [];
+
+// ── Role capabilities ─────────────────────────────────────────
+const CAN_CREATE   = ['operator','maintenance','admin'];
+const CAN_ASSIGN   = ['operator','maintenance','admin'];   // Shift-in-Charge assigns
+const CAN_CLOSE    = ['operator','maintenance','admin'];    // Shift-in-Charge closes
+const CAN_REASSIGN = ['maintenance','admin'];               // Dept Head reassigns only
+
+// ── Init ──────────────────────────────────────────────────────
+async function init() {
+  user = requireAuth(['operator','maintenance','management','admin']);
+  if (!user) return;
+
+  document.getElementById('headerUser').innerHTML =
+    `<strong>${user.full_name}</strong> (${user.role === 'operator' ? 'Shift-in-Charge' : user.role})`;
+
+  const labels = {
+    operator:    '(Your jobs — Raise & Assign & Close)',
+    maintenance: '(All jobs — Reassign only)',
+    management:  '(All jobs — Read only)',
+    admin:       '(All jobs — Full access)'
+  };
+  document.getElementById('roleViewLabel').textContent = labels[user.role] || '';
+
+  if (CAN_CREATE.includes(user.role)) {
+    document.getElementById('raiseJobBtn').style.display = 'inline-flex';
+  }
+
+  await loadEquipmentDropdown();
+  await loadDepartments();
+  await loadJobs();
+
+  if (['operator','maintenance','admin'].includes(user.role)) {
+    setInterval(loadJobs, 60000);
+  }
+}
+
+// ── Load departments for checkboxes ──────────────────────────
+async function loadDepartments() {
+  try {
+    const data = await api('/masters/departments');
+    allDepartments = [...new Map((data.data||[]).map(d => [d.name, d])).values()]
+                     .filter(d => d.is_active !== false);
+
+    // Populate raise modal checkboxes
+    const container = document.getElementById('raiseDeptChecks');
+    if (allDepartments.length) {
+      container.innerHTML = allDepartments.map(d => `
+        <label>
+          <input type="checkbox" value="${d.name}" class="raiseDeptChk"
+            onchange="onRaiseDeptChange()">
+          ${d.name}
+        </label>`).join('');
+    } else {
+      container.innerHTML = '<div style="color:#94a3b8;font-size:.85rem">No departments found</div>';
+    }
+  } catch(e) { console.warn('loadDepartments failed:', e.message); }
+}
+
+function onRaiseDeptChange() {
+  const count = document.querySelectorAll('.raiseDeptChk:checked').length;
+  document.getElementById('raiseMultiNote').style.display = count > 1 ? 'block' : 'none';
+}
+
+// ── Equipment dropdown ────────────────────────────────────────
+async function loadEquipmentDropdown() {
+  try {
+    const data = await api('/equipment');
+    const sel  = document.getElementById('jEquipment');
+    (data.data || []).forEach(e => {
+      sel.innerHTML += `<option value="${e.id}">${e.name} (${e.code})</option>`;
+    });
+  } catch(e) {}
+}
+
+// ── Load jobs ─────────────────────────────────────────────────
+async function loadJobs() {
+  try {
+    const plant = user.selectedPlant || user.plant || '100TPD';
+    const data  = await api(`/jobs?plant=${plant}`);
+    allJobs     = data.data || [];
+    updateSummary();
+    renderJobs();
+  } catch(e) {
+    document.getElementById('jobsList').innerHTML =
+      `<div class="empty-jobs">❌ ${e.message}</div>`;
+  }
+}
+
+function updateSummary() {
+  const c = { OPEN:0, ASSIGNED:0, 'IN PROGRESS':0, COMPLETED:0, CLOSED:0 };
+  allJobs.forEach(j => { if (c[j.status] !== undefined) c[j.status]++; });
+  document.getElementById('countOpen').textContent       = c['OPEN'];
+  document.getElementById('countAssigned').textContent   = c['ASSIGNED'];
+  document.getElementById('countInProgress').textContent = c['IN PROGRESS'];
+  document.getElementById('countCompleted').textContent  = c['COMPLETED'];
+  document.getElementById('countClosed').textContent     = c['CLOSED'];
+}
+
+function filterJobs(btn) {
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentFilter = btn.dataset.status;
+  renderJobs();
+}
+
+// ── Render dept tracking table inside job card ────────────────
+function renderDeptTrack(j) {
+  if (!j.is_multi_assign || !j.assignments || !j.assignments.length) return '';
+  let rows = '';
+  j.assignments.forEach(function(a) {
+    const pillClass = 'pill-' + a.status.replace(/ /g,'-');
+    const completedAt = a.completed_at
+      ? new Date(a.completed_at).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})
+      : '—';
+    rows += '<tr>'
+      + '<td style="font-weight:600;color:#1e40af">' + a.department + '</td>'
+      + '<td><span class="dept-status-pill ' + pillClass + '">' + a.status + '</span></td>'
+      + '<td style="color:#64748b;font-size:.75rem">' + completedAt + '</td>'
+      + '</tr>';
+  });
+  return '<table class="dept-track-table">'
+    + '<thead><tr><th>Department</th><th>Status</th><th>Completed At</th></tr></thead>'
+    + '<tbody>' + rows + '</tbody>'
+    + '</table>';
+}
+
+// ── Render jobs ───────────────────────────────────────────────
+function renderJobs() {
+  const filtered = currentFilter === 'ALL'
+    ? allJobs
+    : allJobs.filter(j => j.status === currentFilter);
+
+  if (!filtered.length) {
+    document.getElementById('jobsList').innerHTML =
+      `<div class="empty-jobs"><div style="font-size:2rem">📋</div><p>No jobs found.</p></div>`;
+    return;
+  }
+
+  const isOperator   = user.role === 'operator';
+  const isMaint      = user.role === 'maintenance' || user.role === 'admin';
+  const isReadOnly   = user.role === 'management';
+
+  let html = '';
+  filtered.forEach(function(j) {
+    const statusKey = j.status.replace(/ /g,'-');
+    const createdAt = new Date(j.created_at).toLocaleString('en-IN',{
+      day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'
+    });
+    const sourceTag = j.description
+      ? '<span class="source-tag">⚡ Stoppage</span>' : '';
+
+    // Dept list for display
+    let deptDisplay = '';
+    if (j.is_multi_assign && j.assignments && j.assignments.length) {
+      deptDisplay = j.assignments.map(function(a) {
+        return '<span style="display:inline-block;margin:.1rem .15rem;padding:.1rem .4rem;'
+          + 'background:#dbeafe;color:#1e40af;border-radius:6px;font-size:.72rem;font-weight:600">'
+          + a.department + '</span>';
+      }).join('');
+    } else if (j.assigned_dept) {
+      deptDisplay = '<span style="color:#1e40af;font-weight:600">' + j.assigned_dept + '</span>';
+    } else {
+      deptDisplay = '<span style="color:#ef4444">Unassigned</span>';
+    }
+
+    // ── Actions per role ──────────────────────────────────────
+    let actions = '';
+    if (!isReadOnly) {
+
+      // OPERATOR (Shift-in-Charge): Assign on OPEN, Update on ASSIGNED/IN PROGRESS, Close on COMPLETED
+      if (isOperator) {
+        if (j.status === 'OPEN') {
+          actions += '<button class="btn btn-primary btn-sm" '
+            + 'onclick="openAssignModal(' + j.id + ',\'' + escHtml(j.title) + '\',\'' + (j.job_number||'') + '\')">'
+            + '📋 Assign Dept(s)</button>';
+        }
+
+        if (j.is_multi_assign && j.assignments && j.assignments.length) {
+          // Multi-assign — only show Update button for SIC's own department
+          const myAssignment = j.assignments.find(function(a) {
+            return a.department === user.department && a.status !== 'COMPLETED';
+          });
+          if (myAssignment) {
+            actions += '<button class="btn btn-sm" style="background:#5b21b6;color:#fff;border:none;border-radius:6px;padding:.3rem .7rem;cursor:pointer;font-weight:600;margin-right:.3rem;font-size:.78rem" '
+              + 'onclick="openDeptUpdateModal(' + j.id + ',\'' + escHtml(j.title) + '\',\'' + (j.job_number||'') + '\',\'' + myAssignment.department + '\',\'' + myAssignment.status + '\')">'
+              + '✏️ Update (' + myAssignment.department + ')</button>';
+          }
+          // Close only when all COMPLETED and SIC is the one who raised it
+          if (j.status === 'COMPLETED') {
+            actions += '<button class="btn btn-sm" style="background:#166534;color:#fff;border:none;border-radius:6px;padding:.35rem .85rem;cursor:pointer;font-weight:600" '
+              + 'onclick="openCloseModal(' + j.id + ',\'' + escHtml(j.title) + '\',\'' + (j.job_number||'') + '\')">'
+              + '✅ Close Job</button>';
+          }
+        } else {
+          // Single assign — whole job status update
+          if (j.status === 'ASSIGNED') {
+            actions += '<button class="btn btn-sm" style="background:#5b21b6;color:#fff;border:none;border-radius:6px;padding:.35rem .85rem;cursor:pointer;font-weight:600" '
+              + 'onclick="openStatusModal(' + j.id + ',\'' + escHtml(j.title) + '\',\'' + (j.job_number||'') + '\',\'ASSIGNED\')">'
+              + '✏️ Update</button>';
+          }
+          if (j.status === 'IN PROGRESS') {
+            actions += '<button class="btn btn-sm" style="background:#5b21b6;color:#fff;border:none;border-radius:6px;padding:.35rem .85rem;cursor:pointer;font-weight:600;margin-right:.4rem" '
+              + 'onclick="openStatusModal(' + j.id + ',\'' + escHtml(j.title) + '\',\'' + (j.job_number||'') + '\',\'IN PROGRESS\')">'
+              + '✏️ Update</button>';
+            actions += '<button class="btn btn-sm" style="background:#166534;color:#fff;border:none;border-radius:6px;padding:.35rem .85rem;cursor:pointer;font-weight:600" '
+              + 'onclick="openCloseModal(' + j.id + ',\'' + escHtml(j.title) + '\',\'' + (j.job_number||'') + '\')">'
+              + '✅ Close Job</button>';
+          }
+          if (j.status === 'COMPLETED') {
+            actions += '<button class="btn btn-sm" style="background:#166534;color:#fff;border:none;border-radius:6px;padding:.35rem .85rem;cursor:pointer;font-weight:600" '
+              + 'onclick="openCloseModal(' + j.id + ',\'' + escHtml(j.title) + '\',\'' + (j.job_number||'') + '\')">'
+              + '✅ Close Job</button>';
+          }
+        }
+      }
+
+      // MAINTENANCE (Dept Head): Reassign only
+      if (isMaint) {
+        if (['ASSIGNED','IN PROGRESS','REASSIGNED'].includes(j.status)) {
+          actions += '<button class="btn btn-sm" style="background:#f59e0b;color:#fff;border:none;border-radius:6px;padding:.35rem .85rem;cursor:pointer;font-weight:600" '
+            + 'onclick="openReassignModal(' + j.id + ',\'' + escHtml(j.title) + '\',\'' + (j.job_number||'') + '\',\'' + (j.assigned_dept||'') + '\')">'
+            + '🔀 Reassign</button>';
+        }
+        if (j.status === 'COMPLETED') {
+          actions += '<button class="btn btn-sm" style="background:#166534;color:#fff;border:none;border-radius:6px;padding:.35rem .85rem;cursor:pointer;font-weight:600" '
+            + 'onclick="openCloseModal(' + j.id + ',\'' + escHtml(j.title) + '\',\'' + (j.job_number||'') + '\')">'
+            + '✅ Close Job</button>';
+        }
+      }
+    }
+
+    html += '<div class="job-card">'
+      + '<div class="job-header">'
+      + '<div style="flex:1">'
+      + '<div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">'
+      + '<span class="job-number">' + (j.job_number||'—') + '</span>' + sourceTag
+      + '</div>'
+      + '<div class="job-title">' + j.title + '</div>'
+      + '<div class="job-meta">'
+      + (j.equipment_name ? '<span>🔧 ' + j.equipment_code + ' — ' + j.equipment_name + '</span>' : '')
+      + '<span>🏢 ' + deptDisplay + '</span>'
+      + '<span>👤 ' + (j.raised_by_name||'—') + '</span>'
+      + '<span>📅 ' + createdAt + '</span>'
+      + (j.shift ? '<span>⏰ Shift ' + j.shift + '</span>' : '')
+      + '</div>'
+      + (j.remarks ? '<div style="font-size:.82rem;color:#64748b;margin-top:.3rem;font-style:italic">💬 ' + j.remarks + '</div>' : '')
+      + '</div>'
+      + '<span class="status-badge status-' + statusKey + '">' + j.status + '</span>'
+      + '</div>'
+      // Dept tracking table for multi-assign
+      + renderDeptTrack(j)
+      + (actions ? '<div class="job-actions">' + actions + '</div>' : '')
+      + '</div>';
+  });
+
+  document.getElementById('jobsList').innerHTML = html;
+}
+
+// ══════════════════════════════════════════════════════════════
+// RAISE JOB MODAL
+// ══════════════════════════════════════════════════════════════
+function openRaiseModal() {
+  ['jTitle','jDesc','jRemarks'].forEach(function(id) {
+    document.getElementById(id).value = '';
+  });
+  document.getElementById('jEquipment').value = '';
+  document.getElementById('jPhotos').value    = '';
+  document.getElementById('jPhotoPreview').innerHTML = '';
+  document.getElementById('raiseMultiNote').style.display = 'none';
+  // Uncheck all dept checkboxes
+  document.querySelectorAll('.raiseDeptChk').forEach(function(c) { c.checked = false; });
+  document.getElementById('raiseModal').classList.add('open');
+}
+function closeRaiseModal() {
+  document.getElementById('raiseModal').classList.remove('open');
+  document.getElementById('jPhotos').value = '';
+  document.getElementById('jPhotoPreview').innerHTML = '';
+}
+
+function previewJobPhotos(input) {
+  const preview = document.getElementById('jPhotoPreview');
+  preview.innerHTML = '';
+  Array.from(input.files).slice(0,5).forEach(function(file, i) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      preview.innerHTML += '<div style="position:relative">'
+        + '<img src="' + e.target.result + '" style="width:70px;height:70px;object-fit:cover;border-radius:6px;border:1px solid #e2e8f0">'
+        + '<span style="position:absolute;top:-5px;right:-5px;background:#ef4444;color:#fff;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:.65rem;cursor:pointer" onclick="removeJobPhoto(' + i + ')">✕</span>'
+        + '</div>';
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function removeJobPhoto(index) {
+  const input = document.getElementById('jPhotos');
+  const dt    = new DataTransfer();
+  Array.from(input.files).forEach(function(file, i) { if (i !== index) dt.items.add(file); });
+  input.files = dt.files;
+  previewJobPhotos(input);
+}
+
+async function uploadJobPhotos() {
+  const input = document.getElementById('jPhotos');
+  if (!input.files.length) return [];
+  const formData = new FormData();
+  Array.from(input.files).slice(0,5).forEach(function(f) { formData.append('photos', f); });
+  try {
+    const token = getToken();
+    const res   = await fetch(API_BASE.replace('/api','') + '/api/upload', {
+      method:'POST',
+      headers:{ 'Authorization': 'Bearer ' + token },
+      body: formData
+    });
+    const data = await res.json();
+    return data.files || [];
+  } catch(e) { return []; }
+}
+
+async function saveJob() {
+  const title = document.getElementById('jTitle').value.trim();
+  if (!title) { showToast('Job title is required', 'error'); return; }
+
+  const depts = [...document.querySelectorAll('.raiseDeptChk:checked')].map(function(c) { return c.value; });
+  if (!depts.length) { showToast('Please select at least one department', 'error'); return; }
+
+  const btn = document.querySelector('#raiseModal .btn-primary');
+  btn.disabled = true; btn.textContent = 'Saving...';
+
+  try {
+    const photos = await uploadJobPhotos();
+    const body = {
+      title,
+      description:    document.getElementById('jDesc').value.trim()    || null,
+      equipment_id:   document.getElementById('jEquipment').value       || null,
+      departments:    depts,
+      assigned_dept:  depts[0],
+      remarks:        document.getElementById('jRemarks').value.trim()  || null,
+      photos:         photos.length ? photos : undefined,
+      plant:          user.selectedPlant || user.plant || '100TPD',
+      shift:          user.selectedShift || user.shift || null,
+      raised_by_dept: user.department || null
+    };
+
+    // Create job first as OPEN, then immediately assign
+    const res = await api('/jobs', { method:'POST', body: JSON.stringify(body) });
+    const jobId = res.data.id;
+
+    // Assign departments immediately
+    await api('/jobs/' + jobId + '/assign', {
+      method:'PATCH',
+      body: JSON.stringify({
+        departments:   depts,
+        assigned_dept: depts[0],
+        remarks:       body.remarks
+      })
+    });
+
+    const msg = depts.length > 1
+      ? '✅ Job raised & assigned to ' + depts.length + ' departments'
+      : '✅ Job raised & assigned to ' + depts[0];
+    showToast(msg);
+    closeRaiseModal();
+    await loadJobs();
+  } catch(e) {
+    showToast(e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = '🔧 Raise Job';
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// ASSIGN MODAL — for already-OPEN jobs (operator assigns later)
+// ══════════════════════════════════════════════════════════════
+let assignJobId = null;
+function openAssignModal(jobId, title, jobNumber) {
+  assignJobId = jobId;
+  document.getElementById('aJobId') && (document.getElementById('aJobId').value = jobId);
+
+  // Build a simple inline assign UI using a prompt-style modal
+  // We reuse raiseModal structure for simplicity — open a dedicated modal
+  openStandaloneAssignModal(jobId, title, jobNumber);
+}
+
+function openStandaloneAssignModal(jobId, title, jobNumber) {
+  // Inject a quick assign modal dynamically if not present
+  let modal = document.getElementById('standaloneAssignModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'standaloneAssignModal';
+    modal.className = 'modal-overlay';
+    modal.innerHTML = '<div class="modal" style="max-width:460px">'
+      + '<div class="modal-header"><div class="modal-title">📋 Assign Job</div>'
+      + '<button class="modal-close" onclick="document.getElementById(\'standaloneAssignModal\').classList.remove(\'open\')">✕</button></div>'
+      + '<div class="modal-body">'
+      + '<div style="background:#f8fafc;border-radius:8px;padding:.85rem;margin-bottom:1rem;border:1px solid #e2e8f0">'
+      + '<strong id="saTitle" style="font-size:.92rem"></strong>'
+      + '<div id="saNumber" style="font-size:.75rem;color:#94a3b8;font-family:monospace;margin-top:.2rem"></div>'
+      + '</div>'
+      + '<div class="form-group">'
+      + '<label class="form-label">Assign to Department(s) *<span style="font-size:.75rem;color:#64748b;font-weight:400"> — select one or more</span></label>'
+      + '<div class="dept-check-list" id="saDeptChecks"><div style="color:#94a3b8">Loading...</div></div>'
+      + '<div class="multi-note" id="saMultiNote">⚡ Multi-department assignment — job closes only when ALL complete.</div>'
+      + '</div>'
+      + '<div class="form-group"><label class="form-label">Remarks</label>'
+      + '<textarea class="form-control" id="saRemarks" rows="2" placeholder="Assignment notes..."></textarea></div>'
+      + '</div>'
+      + '<div class="modal-footer">'
+      + '<button class="btn btn-outline" onclick="document.getElementById(\'standaloneAssignModal\').classList.remove(\'open\')">Cancel</button>'
+      + '<button class="btn btn-primary" onclick="confirmStandaloneAssign()">Assign →</button>'
+      + '</div></div>';
+    document.body.appendChild(modal);
+  }
+
+  document.getElementById('saTitle').textContent  = title;
+  document.getElementById('saNumber').textContent = jobNumber;
+  document.getElementById('saRemarks').value      = '';
+  document.getElementById('saMultiNote').style.display = 'none';
+
+  // Populate checkboxes
+  const container = document.getElementById('saDeptChecks');
+  if (allDepartments.length) {
+    container.innerHTML = allDepartments.map(function(d) {
+      return '<label><input type="checkbox" value="' + d.name + '" class="saDeptChk" onchange="onSaChange()"> ' + d.name + '</label>';
+    }).join('');
+  }
+  modal.classList.add('open');
+}
+
+function onSaChange() {
+  const count = document.querySelectorAll('.saDeptChk:checked').length;
+  document.getElementById('saMultiNote').style.display = count > 1 ? 'block' : 'none';
+}
+
+async function confirmStandaloneAssign() {
+  const depts = [...document.querySelectorAll('.saDeptChk:checked')].map(function(c) { return c.value; });
+  if (!depts.length) { showToast('Select at least one department', 'error'); return; }
+  const remarks = document.getElementById('saRemarks').value.trim();
+
+  const btn = document.querySelector('#standaloneAssignModal .btn-primary');
+  btn.disabled = true; btn.textContent = 'Assigning...';
+  try {
+    await api('/jobs/' + assignJobId + '/assign', {
+      method:'PATCH',
+      body: JSON.stringify({ departments: depts, assigned_dept: depts[0], remarks: remarks||null })
+    });
+    const msg = depts.length > 1
+      ? '✅ Assigned to ' + depts.length + ' departments'
+      : '✅ Assigned to ' + depts[0];
+    showToast(msg);
+    document.getElementById('standaloneAssignModal').classList.remove('open');
+    await loadJobs();
+  } catch(e) { showToast(e.message, 'error'); }
+  finally { btn.disabled = false; btn.textContent = 'Assign →'; }
+}
+
+// ══════════════════════════════════════════════════════════════
+// CLOSE JOB MODAL (Shift-in-Charge)
+// ══════════════════════════════════════════════════════════════
+function openCloseModal(jobId, title, jobNumber) {
+  document.getElementById('clJobId').value           = jobId;
+  document.getElementById('clJobTitle').textContent  = title;
+  document.getElementById('clJobNumber').textContent = jobNumber;
+  document.getElementById('clRemarks').value         = '';
+  document.getElementById('clPendingWarn').style.display = 'none';
+
+  const job = allJobs.find(function(j) { return j.id == jobId; });
+  const deptTable = document.getElementById('clDeptTable');
+  const deptRows  = document.getElementById('clDeptRows');
+  const confirmBtn = document.getElementById('clConfirmBtn');
+
+  if (job && job.is_multi_assign && job.assignments && job.assignments.length) {
+    deptTable.style.display = 'block';
+    let rows = '';
+    let pendingDepts = [];
+    job.assignments.forEach(function(a) {
+      const pillClass = 'pill-' + a.status.replace(/ /g,'-');
+      const completedAt = a.completed_at
+        ? new Date(a.completed_at).toLocaleString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})
+        : '—';
+      rows += '<tr><td style="font-weight:600;color:#1e40af">' + a.department + '</td>'
+        + '<td><span class="dept-status-pill ' + pillClass + '">' + a.status + '</span></td>'
+        + '<td style="color:#64748b;font-size:.75rem">' + completedAt + '</td></tr>';
+      if (a.status !== 'COMPLETED') pendingDepts.push(a.department);
+    });
+    deptRows.innerHTML = rows;
+
+    if (pendingDepts.length) {
+      document.getElementById('clPendingWarn').style.display = 'block';
+      document.getElementById('clPendingWarn').textContent =
+        '⚠️ Cannot close yet — pending: ' + pendingDepts.join(', ');
+      confirmBtn.disabled = true;
+      confirmBtn.style.opacity = '.5';
+    } else {
+      confirmBtn.disabled = false;
+      confirmBtn.style.opacity = '1';
+    }
+  } else {
+    deptTable.style.display = 'none';
+    confirmBtn.disabled = false;
+    confirmBtn.style.opacity = '1';
+  }
+
+  document.getElementById('closeModal').classList.add('open');
+}
+function closeCloseModal() {
+  document.getElementById('closeModal').classList.remove('open');
+}
+
+async function confirmClose() {
+  const jobId   = document.getElementById('clJobId').value;
+  const remarks = document.getElementById('clRemarks').value.trim();
+  const btn     = document.getElementById('clConfirmBtn');
+  btn.disabled = true; btn.textContent = 'Closing...';
+  try {
+    await api('/jobs/' + jobId + '/status', {
+      method:'PATCH',
+      body: JSON.stringify({ status:'CLOSED', remarks: remarks||null })
+    });
+    showToast('✅ Job closed successfully');
+    closeCloseModal();
+    await loadJobs();
+  } catch(e) { showToast(e.message, 'error'); }
+  finally { btn.disabled = false; btn.textContent = '✅ Close Job'; }
+}
+
+// ══════════════════════════════════════════════════════════════
+// REASSIGN MODAL (Dept Head only)
+// ══════════════════════════════════════════════════════════════
+let reassignJobId = null;
+function openReassignModal(jobId, title, jobNumber, currentDept) {
+  reassignJobId = jobId;
+  let modal = document.getElementById('reassignModalOp');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'reassignModalOp';
+    modal.className = 'modal-overlay';
+    modal.innerHTML = '<div class="modal" style="max-width:440px">'
+      + '<div class="modal-header"><div class="modal-title">🔀 Reassign Job</div>'
+      + '<button class="modal-close" onclick="document.getElementById(\'reassignModalOp\').classList.remove(\'open\')">✕</button></div>'
+      + '<div class="modal-body">'
+      + '<div style="background:#f8fafc;border-radius:8px;padding:.85rem;margin-bottom:1rem;border:1px solid #e2e8f0">'
+      + '<strong id="rmTitle" style="font-size:.92rem"></strong>'
+      + '<div id="rmNumber" style="font-size:.75rem;color:#94a3b8;font-family:monospace;margin-top:.2rem"></div>'
+      + '<div style="margin-top:.4rem;font-size:.82rem;color:#64748b">Current dept: <strong id="rmCurrentDept"></strong></div>'
+      + '</div>'
+      + '<div class="form-group"><label class="form-label">Reassign To *</label>'
+      + '<select class="form-control" id="rmNewDept"><option value="">— Select Department —</option></select></div>'
+      + '<div class="form-group"><label class="form-label">Reason for Reassignment</label>'
+      + '<textarea class="form-control" id="rmRemarks" rows="2" placeholder="Why is this being reassigned?"></textarea></div>'
+      + '</div>'
+      + '<div class="modal-footer">'
+      + '<button class="btn btn-outline" onclick="document.getElementById(\'reassignModalOp\').classList.remove(\'open\')">Cancel</button>'
+      + '<button class="btn btn-primary" style="background:#f59e0b;border-color:#f59e0b" onclick="confirmReassign()">🔀 Reassign</button>'
+      + '</div></div>';
+    document.body.appendChild(modal);
+  }
+
+  document.getElementById('rmTitle').textContent       = title;
+  document.getElementById('rmNumber').textContent      = jobNumber;
+  document.getElementById('rmCurrentDept').textContent = currentDept || 'Multiple';
+  document.getElementById('rmRemarks').value           = '';
+
+  const sel = document.getElementById('rmNewDept');
+  sel.innerHTML = '<option value="">— Select Department —</option>';
+  allDepartments.forEach(function(d) {
+    sel.innerHTML += '<option value="' + d.name + '">' + d.name + '</option>';
+  });
+
+  modal.classList.add('open');
+}
+
+async function confirmReassign() {
+  const toDept  = document.getElementById('rmNewDept').value;
+  const remarks = document.getElementById('rmRemarks').value.trim();
+  if (!toDept) { showToast('Please select a department', 'error'); return; }
+
+  const btn = document.querySelector('#reassignModalOp .btn-primary');
+  btn.disabled = true; btn.textContent = 'Reassigning...';
+  try {
+    await api('/jobs/' + reassignJobId + '/reassign', {
+      method:'PATCH',
+      body: JSON.stringify({ to_dept: toDept, remarks: remarks||null })
+    });
+    showToast('✅ Job reassigned to ' + toDept);
+    document.getElementById('reassignModalOp').classList.remove('open');
+    await loadJobs();
+  } catch(e) { showToast(e.message, 'error'); }
+  finally { btn.disabled = false; btn.textContent = '🔀 Reassign'; }
+}
+
+// ── Dept Update Modal for SIC (multi-assign) ─────────────────
+let deptUpdateJobId = null, deptUpdateDept = null;
+function openDeptUpdateModal(jobId, title, jobNumber, dept, currentStatus) {
+  deptUpdateJobId = jobId;
+  deptUpdateDept  = dept;
+
+  let modal = document.getElementById('deptUpdateModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'deptUpdateModal';
+    modal.className = 'modal-overlay';
+    modal.innerHTML = '<div class="modal" style="max-width:420px">'
+      + '<div class="modal-header"><div class="modal-title">✏️ Update Department Status</div>'
+      + '<button class="modal-close" onclick="document.getElementById(\'deptUpdateModal\').classList.remove(\'open\')">✕</button></div>'
+      + '<div class="modal-body">'
+      + '<div style="background:#f8fafc;border-radius:8px;padding:.85rem;margin-bottom:1rem;border:1px solid #e2e8f0">'
+      + '<strong id="duTitle" style="font-size:.92rem"></strong>'
+      + '<div id="duNumber" style="font-size:.75rem;color:#94a3b8;font-family:monospace;margin-top:.2rem"></div>'
+      + '<div style="margin-top:.4rem;font-size:.82rem;color:#7c3aed;font-weight:600">Department: <span id="duDept"></span></div>'
+      + '</div>'
+      + '<div class="form-group"><label class="form-label">New Status *</label>'
+      + '<select class="form-control" id="duStatus"><option value="">— Select —</option></select></div>'
+      + '<div class="form-group"><label class="form-label">Remarks</label>'
+      + '<textarea class="form-control" id="duRemarks" rows="2" placeholder="What was done..."></textarea></div>'
+      + '</div>'
+      + '<div class="modal-footer">'
+      + '<button class="btn btn-outline" onclick="document.getElementById(\'deptUpdateModal\').classList.remove(\'open\')">Cancel</button>'
+      + '<button class="btn btn-primary" onclick="confirmDeptUpdate()">✅ Update</button>'
+      + '</div></div>';
+    document.body.appendChild(modal);
+  }
+
+  document.getElementById('duTitle').textContent  = title;
+  document.getElementById('duNumber').textContent = jobNumber;
+  document.getElementById('duDept').textContent   = dept;
+  document.getElementById('duRemarks').value      = '';
+
+  const sel = document.getElementById('duStatus');
+  sel.innerHTML = '<option value="">— Select —</option>';
+  if (currentStatus === 'ASSIGNED') {
+    sel.innerHTML += '<option value="IN PROGRESS">IN PROGRESS</option>';
+  } else {
+    sel.innerHTML += '<option value="IN PROGRESS">IN PROGRESS</option>';
+    sel.innerHTML += '<option value="COMPLETED">COMPLETED</option>';
+  }
+  modal.classList.add('open');
+}
+
+async function confirmDeptUpdate() {
+  const status  = document.getElementById('duStatus').value;
+  const remarks = document.getElementById('duRemarks').value.trim();
+  if (!status) { showToast('Please select a status', 'error'); return; }
+
+  const btn = document.querySelector('#deptUpdateModal .btn-primary');
+  btn.disabled = true; btn.textContent = 'Updating...';
+  try {
+    const res = await api('/jobs/' + deptUpdateJobId + '/dept-status', {
+      method:'PATCH',
+      body: JSON.stringify({ department: deptUpdateDept, status, remarks: remarks||null })
+    });
+    showToast(res.all_completed
+      ? '✅ All departments done — Job COMPLETED!'
+      : '✅ ' + deptUpdateDept + ' updated to ' + status);
+    document.getElementById('deptUpdateModal').classList.remove('open');
+    await loadJobs();
+  } catch(e) { showToast(e.message, 'error'); }
+  finally { btn.disabled = false; btn.textContent = '✅ Update'; }
+}
+
+// ── Status modal (single jobs) ────────────────────────────────
+function openStatusModal(jobId, title, jobNumber, currentStatus) {
+  document.getElementById('sJobId').value           = jobId;
+  document.getElementById('sJobTitle').textContent  = title;
+  document.getElementById('sJobNumber').textContent = jobNumber;
+  document.getElementById('sRemarks').value         = '';
+
+  // Set valid next statuses based on current
+  const sel = document.getElementById('sStatus');
+  sel.innerHTML = '<option value="">— Select Status —</option>';
+  if (currentStatus === 'ASSIGNED') {
+    sel.innerHTML += '<option value="IN PROGRESS">IN PROGRESS</option>';
+  } else if (currentStatus === 'IN PROGRESS') {
+    sel.innerHTML += '<option value="COMPLETED">COMPLETED</option>';
+  } else {
+    sel.innerHTML += '<option value="IN PROGRESS">IN PROGRESS</option>';
+    sel.innerHTML += '<option value="COMPLETED">COMPLETED</option>';
+  }
+  document.getElementById('statusModal').classList.add('open');
+}
+function closeStatusModal() { document.getElementById('statusModal').classList.remove('open'); }
+
+async function updateJobStatus() {
+  const jobId   = document.getElementById('sJobId').value;
+  const status  = document.getElementById('sStatus').value;
+  const remarks = document.getElementById('sRemarks').value.trim();
+  if (!status) { showToast('Please select a status', 'error'); return; }
+  try {
+    await api('/jobs/' + jobId + '/status', {
+      method:'PATCH',
+      body: JSON.stringify({ status, remarks: remarks||null })
+    });
+    showToast('✅ Job updated to ' + status);
+    closeStatusModal();
+    await loadJobs();
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+// ── Helpers ───────────────────────────────────────────────────
+function escHtml(s) { return (s||'').replace(/'/g,"\\'"); }
+function goBack()   { history.back(); }
+function logout()   { clearSession(); window.location.href = '../login.html'; }
+
+init();
+</script>
+</body>
+</html>

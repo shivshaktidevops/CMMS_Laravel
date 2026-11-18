@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CMMS — Plant Login</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 50%, #0369a1 100%);
+    min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1rem;
+  }
+  .login-box {
+    background: #fff; border-radius: 16px;
+    box-shadow: 0 25px 60px rgba(0,0,0,.3);
+    padding: 2.5rem 2.5rem 2rem;
+    width: 100%; max-width: 400px;
+  }
+  .plant-logo { text-align: center; margin-bottom: 2rem; }
+  .plant-logo .icon { font-size: 3rem; }
+  .plant-logo h1 { font-size: 1.4rem; font-weight: 800; color: #1e3a8a; margin-top: .5rem; }
+  .plant-logo p  { font-size: .85rem; color: #64748b; margin-top: .2rem; }
+  .form-group { margin-bottom: 1.1rem; }
+  label { display: block; font-weight: 600; font-size: .85rem; color: #1e293b; margin-bottom: .35rem; }
+  input {
+    width: 100%; padding: .7rem 1rem; border: 2px solid #e2e8f0;
+    border-radius: 8px; font-size: 1rem; transition: border .15s;
+  }
+  input:focus { outline: none; border-color: #1e40af; box-shadow: 0 0 0 3px rgba(30,64,175,.1); }
+  .btn-login {
+    width: 100%; padding: .85rem; background: #1e40af; color: #fff;
+    border: none; border-radius: 10px; font-size: 1rem; font-weight: 700;
+    cursor: pointer; margin-top: .5rem; transition: all .15s;
+  }
+  .btn-login:hover { background: #1e3a8a; }
+  .btn-login:active { transform: scale(.98); }
+  .error-msg {
+    background: #fee2e2; color: #991b1b; padding: .75rem 1rem;
+    border-radius: 8px; font-size: .88rem; margin-bottom: 1rem;
+    border: 1px solid #fca5a5; display: none;
+  }
+  .footer-note { text-align: center; font-size: .78rem; color: #94a3b8; margin-top: 1.5rem; }
+  .shift-row { display: flex; gap: .5rem; margin-bottom: 1rem; }
+  .shift-btn {
+    flex: 1; padding: .55rem; border: 2px solid #e2e8f0; background: #fff;
+    border-radius: 8px; font-weight: 700; font-size: .85rem; cursor: pointer; transition: all .15s;
+  }
+  .shift-btn.active { border-color: #1e40af; background: #dbeafe; color: #1e40af; }
+  .plant-row { display: flex; gap: .5rem; margin-bottom: 1rem; }
+  .plant-btn {
+    flex: 1; padding: .65rem; border: 2px solid #e2e8f0; background: #fff;
+    border-radius: 8px; font-weight: 700; font-size: .9rem; cursor: pointer; transition: all .15s;
+    color: #1e293b;
+  }
+  .plant-btn.active { border-color: #0369a1; background: #e0f2fe; color: #0369a1; }
+</style>
+</head>
+<body>
+<div class="login-box">
+  <div class="plant-logo">
+    <div class="icon">🏭</div>
+    <h1>Plant CMMS</h1>
+    <p>Sponge Iron & Pellet Manufacturing</p>
+  </div>
+
+  <div class="error-msg" id="errMsg"></div>
+
+  <div class="form-group">
+    <label>Username</label>
+    <input type="text" id="username" placeholder="Enter your username" autocomplete="username">
+  </div>
+
+  <div class="form-group">
+    <label>Password</label>
+    <input type="password" id="password" placeholder="Enter your password" autocomplete="current-password">
+  </div>
+
+  <div class="form-group" id="shiftGroup" style="display:none">
+    <label>Current Shift</label>
+    <div class="shift-row">
+      <button class="shift-btn" data-shift="A">Shift A</button>
+      <button class="shift-btn" data-shift="B">Shift B</button>
+      <button class="shift-btn" data-shift="C">Shift C</button>
+
+    </div>
+    <input type="hidden" id="selectedShift">
+  </div>
+
+  <div class="form-group" id="plantGroup" style="transition:opacity .2s">
+    <label>Select Plant</label>
+    <div class="plant-row" id="plantBtnRow">
+      <button class="plant-btn" id="plantBtn100" data-plant="100TPD" onclick="selectPlant(this)">🏭 100 TPD</button>
+      <button class="plant-btn" id="plantBtn225" data-plant="225TPD" onclick="selectPlant(this)">🏭 225 TPD</button>
+    </div>
+    <div id="plantLockedNote" style="font-size:.78rem;color:#dc2626;font-weight:600;margin-top:.4rem;display:none">
+      🔒 Your account is restricted to this plant only.
+    </div>
+    <input type="hidden" id="selectedPlant">
+  </div>
+
+  <button class="btn-login" id="loginBtn" onclick="doLogin()">Login</button>
+  <p class="footer-note">For support, contact your system administrator</p>
+</div>
+
+<!-- <script src="../shared/cmms.js"></script> -->
+<script>
+const API_BASE = '/api';
+
+let selectedShift = '';
+let selectedPlant = '';
+let pendingUser   = null; // holds auth response while waiting for shift/plant
+
+// Shift/plant selectors start hidden — shown only for operators/maintenance after auth
+document.getElementById('shiftGroup').style.display = 'none';
+document.getElementById('plantGroup').style.display = 'none';
+
+// ── Shift timing rules ───────────────────────────────────────
+// Shift A: 06:00–14:00 | Shift B: 14:00–22:00 | Shift C: 22:00–06:00
+// Grace period: 30 min before shift start
+const SHIFT_WINDOWS = {
+  A: { start: 6,  end: 14 },
+  B: { start: 14, end: 22 },
+  C: { start: 22, end: 6  }  // crosses midnight
+};
+const GRACE_MINUTES = 30;
+
+function getCurrentAllowedShift() {
+  const now   = new Date();
+  const h     = now.getHours();
+  const m     = now.getMinutes();
+  const total = h * 60 + m; // minutes since midnight
+
+  // Check each shift including 30-min grace before start
+  for (const [shift, w] of Object.entries(SHIFT_WINDOWS)) {
+    let startMin = w.start * 60;
+    let endMin   = w.end   * 60;
+
+    // Allow 30-min early login (grace period)
+    const graceStart = (startMin - GRACE_MINUTES + 1440) % 1440;
+
+    if (w.end < w.start) {
+      // Shift C crosses midnight
+      if (total >= graceStart || total < endMin) return shift;
+    } else {
+      if (total >= graceStart && total < endMin) return shift;
+    }
+  }
+  return null;
+}
+
+function getShiftLabel(shift) {
+  const labels = { A: 'Shift A (6:00 AM – 2:00 PM)', B: 'Shift B (2:00 PM – 10:00 PM)', C: 'Shift C (10:00 PM – 6:00 AM)' };
+  return labels[shift] || shift;
+}
+
+function closeShiftWarn() {
+  document.getElementById('shiftWarnOverlay').style.display = 'none';
+  // Deselect the wrong shift
+  document.querySelectorAll('.shift-btn').forEach(b => b.classList.remove('active'));
+  selectedShift = '';
+  document.getElementById('selectedShift').value = '';
+}
+
+document.querySelectorAll('.shift-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const chosen  = btn.dataset.shift;
+    const allowed = getCurrentAllowedShift();
+
+    if (allowed && chosen !== allowed) {
+      // Wrong shift — show warning, block selection
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString('en-IN', { hour:'2-digit', minute:'2-digit', hour12:true });
+      document.getElementById('shiftWarnMsg').innerHTML =
+        `You selected <strong>${getShiftLabel(chosen)}</strong>, but the current time is <strong>${timeStr}</strong>.`;
+      document.getElementById('shiftWarnCurrent').textContent = getShiftLabel(allowed);
+      document.getElementById('shiftWarnOverlay').style.display = 'flex';
+      return; // block selection
+    }
+
+    document.querySelectorAll('.shift-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    selectedShift = chosen;
+    document.getElementById('selectedShift').value = selectedShift;
+  });
+});
+
+function selectPlant(btn) {
+  document.querySelectorAll('.plant-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  selectedPlant = btn.dataset.plant;
+  document.getElementById('selectedPlant').value = selectedPlant;
+}
+
+// Allow Enter key
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    if (pendingUser) confirmShiftPlant();
+    else doLogin();
+  }
+});
+
+async function doLogin() {
+  const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value;
+  const errEl    = document.getElementById('errMsg');
+  const btn      = document.getElementById('loginBtn');
+  errEl.style.display = 'none';
+
+  if (!username || !password) {
+    showErr('Please enter username and password');
+    return;
+  }
+
+  btn.textContent = 'Logging in...';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message);
+
+    const role    = data.user.role;
+    const isMgmt  = (role === 'management' || role === 'admin');
+
+    if (isMgmt) {
+      // ── Management / Admin ── redirect immediately, no shift/plant needed
+      data.user.selectedPlant = null;
+      data.user.selectedShift = null;
+      localStorage.setItem('cmms_token', data.token);
+      localStorage.setItem('cmms_user', JSON.stringify(data.user));
+      if (role === 'management') window.location.href = 'management/dashboard.html';
+      else                       window.location.href = 'admin/admin.html';
+
+    } else {
+      // ── Operator / Maintenance ── show shift + plant selector
+      pendingUser = data;
+      btn.textContent = 'Login';
+      btn.disabled    = false;
+
+      // Hide credential fields, show shift+plant panel
+      document.getElementById('username').closest('.form-group').style.display = 'none';
+      document.getElementById('password').closest('.form-group').style.display = 'none';
+      document.getElementById('shiftGroup').style.display = 'block';
+      document.getElementById('plantGroup').style.display = 'block';
+
+      const assignedPlant = data.user.plant;
+      const userRole      = data.user.role;
+      const btn100   = document.getElementById('plantBtn100');
+      const btn225   = document.getElementById('plantBtn225');
+      const lockNote = document.getElementById('plantLockedNote');
+
+      // Plant restriction applies to both operator AND maintenance roles
+      // Only BOTH assignment allows free choice
+      if ((userRole === 'operator' || userRole === 'maintenance') && assignedPlant === '100TPD') {
+        btn225.style.display = 'none';
+        btn100.style.display = 'block';
+        selectPlant(btn100);
+        lockNote.style.display = 'block';
+      } else if ((userRole === 'operator' || userRole === 'maintenance') && assignedPlant === '225TPD') {
+        btn100.style.display = 'none';
+        btn225.style.display = 'block';
+        selectPlant(btn225);
+        lockNote.style.display = 'block';
+      } else {
+        // BOTH assignment — free to choose plant
+        btn100.style.display = 'block';
+        btn225.style.display = 'block';
+        lockNote.style.display = 'none';
+      }
+      btn.textContent  = 'Continue →';
+      btn.onclick      = confirmShiftPlant;
+      btn.disabled     = false;
+
+      // Show welcome message
+      const logo = document.querySelector('.plant-logo p');
+      logo.innerHTML = `✅ Welcome, <strong>${data.user.full_name}</strong> — select shift & plant to continue`;
+      logo.style.color = '#166534';
+    }
+
+  } catch (err) {
+    showErr(err.message || 'Login failed. Check credentials.');
+    btn.textContent = 'Login';
+    btn.disabled = false;
+  }
+}
+
+function confirmShiftPlant() {
+  const errEl = document.getElementById('errMsg');
+  errEl.style.display = 'none';
+
+  if (!selectedShift) { showErr('Please select your current shift'); return; }
+  if (!selectedPlant) { showErr('Please select a plant (100 TPD or 225 TPD)'); return; }
+
+  const data = pendingUser;
+  data.user.selectedShift = selectedShift;
+  data.user.selectedPlant = selectedPlant;
+  localStorage.setItem('cmms_token', data.token);
+  localStorage.setItem('cmms_user', JSON.stringify(data.user));
+
+  const role = data.user.role;
+  if      (role === 'operator')    window.location.href = 'operator/shift-log.html';
+  else if (role === 'maintenance') window.location.href = 'maintenance/breakdowns.html';
+  else showErr('Unknown role: ' + role);
+}
+
+function showErr(msg) {
+  const el = document.getElementById('errMsg');
+  el.textContent = msg;
+  el.style.display = 'block';
+  document.getElementById('loginBtn').textContent = 'Login';
+  document.getElementById('loginBtn').disabled = false;
+}
+
+// Auto-detect if already logged in
+const existingToken = localStorage.getItem('cmms_token');
+const existingUser  = JSON.parse(localStorage.getItem('cmms_user') || 'null');
+if (existingToken && existingUser) {
+  const role = existingUser.role;
+  if      (role === 'operator')    window.location.href = 'operator/shift-log.html';
+  else if (role === 'maintenance') window.location.href = 'maintenance/breakdowns.html';
+  else if (role === 'management')  window.location.href = 'management/dashboard.html';
+  else if (role === 'admin')       window.location.href = 'admin/admin.html';
+}
+</script>
+
+<!-- Shift Warning Modal -->
+<div id="shiftWarnOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);
+  z-index:999;display:none;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:16px;padding:2rem;max-width:360px;width:90%;
+    box-shadow:0 20px 60px rgba(0,0,0,.3);text-align:center">
+    <div style="font-size:2.5rem;margin-bottom:.75rem">⚠️</div>
+    <div style="font-size:1.1rem;font-weight:800;color:#dc2626;margin-bottom:.5rem">Wrong Shift Selected</div>
+    <div id="shiftWarnMsg" style="font-size:.9rem;color:#475569;margin-bottom:1.5rem;line-height:1.5"></div>
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;
+      padding:.75rem;margin-bottom:1.25rem;font-size:.82rem;color:#991b1b">
+      🔒 Access is restricted to the <strong id="shiftWarnCurrent"></strong> only at this time.
+    </div>
+    <button onclick="closeShiftWarn()"
+      style="width:100%;padding:.75rem;background:#dc2626;color:#fff;border:none;
+        border-radius:10px;font-size:.95rem;font-weight:700;cursor:pointer;font-family:inherit">
+      OK, Select Correct Shift
+    </button>
+  </div>
+</div>
+</body>
+</html>

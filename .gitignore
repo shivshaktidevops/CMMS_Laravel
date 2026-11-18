@@ -1,0 +1,26 @@
+# Laravel Environment
+/.env
+/.env.*
+!/ .env.example
+
+# Dependencies
+/vendor
+/node_modules
+
+# Storage
+/public/storage
+/storage/*.key
+/storage/logs/*.log
+/storage/framework/cache/*
+/storage/framework/sessions/*
+/storage/framework/views/*
+
+# Laravel Cache
+/bootstrap/cache/*.php
+
+# PHPUnit
+.phpunit.result.cache
+
+# OS Files
+.DS_Store
+Thumbs.db
