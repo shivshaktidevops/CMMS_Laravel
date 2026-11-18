@@ -1,0 +1,12 @@
+<?php
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+return new class extends Migration {
+ public function up(): void {
+  Schema::create('eq_monitoring_logs', function (Blueprint $t) { $t->increments('id'); $t->unsignedInteger('monitoring_id'); $t->unsignedInteger('equipment_id'); $t->string('plant',20)->nullable(); $t->string('department',100)->nullable(); $t->char('shift',1); $t->unsignedInteger('logged_by'); $t->json('readings'); $t->text('remarks')->nullable(); $t->date('logged_date'); $t->dateTime('logged_at',6)->nullable(); $t->foreign('monitoring_id')->references('id')->on('equipment_monitoring_types')->cascadeOnDelete(); $t->foreign('equipment_id')->references('id')->on('equipment')->cascadeOnDelete(); $t->foreign('logged_by')->references('id')->on('users'); $t->index('equipment_id'); $t->index('logged_at'); $t->index('shift'); });
+  Schema::create('monitoring_logs', function (Blueprint $t) { $t->increments('id'); $t->unsignedInteger('monitoring_id'); $t->unsignedInteger('equipment_id'); $t->string('plant',50); $t->string('department',100)->nullable(); $t->string('shift',20); $t->unsignedInteger('logged_by'); $t->json('readings'); $t->text('remarks')->nullable(); $t->date('logged_date'); $t->dateTime('logged_at',6)->nullable(); $t->foreign('monitoring_id')->references('id')->on('equipment_monitoring')->cascadeOnDelete(); $t->foreign('equipment_id')->references('id')->on('equipment')->cascadeOnDelete(); $t->foreign('logged_by')->references('id')->on('users'); $t->unique(['monitoring_id','shift','logged_date'],'uq_monitoring_logs_shift_date'); $t->index('logged_date'); $t->index('equipment_id'); $t->index('monitoring_id'); });
+  Schema::create('load_logs', function (Blueprint $t) { $t->increments('id'); $t->unsignedInteger('equipment_id'); $t->string('plant',50)->nullable(); $t->string('department',100)->nullable(); $t->string('shift',20); $t->unsignedInteger('logged_by'); $t->decimal('red_load',10,2)->nullable(); $t->decimal('yellow_load',10,2)->nullable(); $t->decimal('blue_load',10,2)->nullable(); $t->text('remarks')->nullable(); $t->dateTime('logged_at',6)->nullable(); $t->foreign('equipment_id')->references('id')->on('equipment')->cascadeOnDelete(); $t->foreign('logged_by')->references('id')->on('users'); $t->index(['equipment_id','shift','logged_at']); });
+ }
+ public function down(): void { Schema::dropIfExists('load_logs'); Schema::dropIfExists('monitoring_logs'); Schema::dropIfExists('eq_monitoring_logs'); }
+};
