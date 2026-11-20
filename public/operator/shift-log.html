@@ -129,10 +129,10 @@
         <span id="plantDisplay" style="color:#0369a1;font-weight:700;margin-left:.5rem"></span>
       </div>
     </div>
-    <div style="display:flex;gap:.5rem" id="deptFilterBar">
+<!--     <div style="display:flex;gap:.5rem" id="deptFilterBar">
       <button class="dept-btn active" data-dept="All" onclick="filterDept(this)">All</button>
-      <!-- dynamic dept buttons injected here -->
-    </div>
+      !-- dynamic dept buttons injected here --
+    </div> -->
     <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
       <div style="position:relative">
         <span style="position:absolute;left:.6rem;top:50%;transform:translateY(-50%);color:#94a3b8">🔍</span>
@@ -376,6 +376,7 @@
 <script>
 let user, allEquipment = [], stopReasons = [], pendingStop = null;
 let pendingOperatingEquipment = null;
+let pendingOperatingMode = 'edit';
 function getRoleLabel(role) {
   if (role === 'operator') return 'Shift-in-Charge';
   if (role === 'maintenance') return 'Department Head';
@@ -477,17 +478,60 @@ function filterDept(btn) {
   renderEquipment();
 }
 
+// function renderEquipment() {
+//   const q = (document.getElementById('eqSearch') ? document.getElementById('eqSearch').value : '').toLowerCase().trim();
+//   let filtered = currentDept === 'All' ? allEquipment : allEquipment.filter(e => e.department === currentDept);
+//   if (q) filtered = filtered.filter(e =>
+//     (e.name||'').toLowerCase().includes(q) ||
+//     (e.code||'').toLowerCase().includes(q) ||
+//     (e.location||'').toLowerCase().includes(q));
+//   if (!filtered.length) {
+//     document.getElementById('eqContainer').innerHTML = '<div class="empty-state"><div class="icon">📋</div><p>No equipment found.</p></div>';
+//     return;
+//   }
+
+
+
 function renderEquipment() {
-  const q = (document.getElementById('eqSearch') ? document.getElementById('eqSearch').value : '').toLowerCase().trim();
-  let filtered = currentDept === 'All' ? allEquipment : allEquipment.filter(e => e.department === currentDept);
-  if (q) filtered = filtered.filter(e =>
-    (e.name||'').toLowerCase().includes(q) ||
-    (e.code||'').toLowerCase().includes(q) ||
-    (e.location||'').toLowerCase().includes(q));
-  if (!filtered.length) {
-    document.getElementById('eqContainer').innerHTML = '<div class="empty-state"><div class="icon">📋</div><p>No equipment found.</p></div>';
-    return;
-  }
+
+    const q = (
+        document.getElementById('eqSearch')
+            ? document.getElementById('eqSearch').value
+            : ''
+    ).toLowerCase().trim();
+
+    const userDepartment = String(user?.department || '')
+        .trim()
+        .toLowerCase();
+
+    // Operator must have a department
+    if (user.role === 'operator' && !userDepartment) {
+        document.getElementById('eqContainer').innerHTML = `
+            <div class="empty-state">
+                <p>Your account has no department assigned.</p>
+                <p>Please contact administrator.</p>
+            </div>
+        `;
+        return;
+    }
+
+    // Operator: only own department
+    // Admin: all departments
+    let filtered = user.role === 'operator'
+        ? allEquipment.filter(e =>
+            String(e.department || '').trim().toLowerCase() === userDepartment
+          )
+        : [...allEquipment];
+
+    // Search remains unchanged
+    if (q) {
+        filtered = filtered.filter(e =>
+            (e.name || '').toLowerCase().includes(q) ||
+            (e.code || '').toLowerCase().includes(q) ||
+            (e.location || '').toLowerCase().includes(q)
+        );
+}
+
 
   const depts = {};
   filtered.forEach(eq => {
@@ -659,7 +703,7 @@ function renderEquipment() {
 
     <!-- EXISTING RUNNING BUTTON -->
     <button class="btn-running"
-        onclick="logStatus(${eq.id}, 'RUNNING', '${escHtml(eq.name)}')"
+        onclick="openOperatingLogModal(${eq.id}, 'running')"
         ${running ? 'disabled' : ''}>
         ✅ RUNNING
     </button>
@@ -926,6 +970,7 @@ document.addEventListener('click', function () {
 // Edit RPM and Load details
 
 function editEquipment(eqId) {
+
     const eq = allEquipment.find(
         item => Number(item.id) === Number(eqId)
     );
@@ -935,20 +980,19 @@ function editEquipment(eqId) {
         return;
     }
 
-    // Close the three-dot menu
+    // Close three-dot menu
     document.querySelectorAll('.eq-dropdown').forEach(menu => {
         menu.classList.remove('show');
     });
 
-    // Open existing RPM and Load popup
-    openOperatingLogModal(eqId);
+    // IMPORTANT: Edit mode
+    openOperatingLogModal(eqId, 'edit');
 }
 
 
 
-function openOperatingLogModal(eqId) {
+function openOperatingLogModal(eqId, mode = 'edit') {
 
-    // Find selected equipment
     const eq = allEquipment.find(
         item => Number(item.id) === Number(eqId)
     );
@@ -958,38 +1002,37 @@ function openOperatingLogModal(eqId) {
         return;
     }
 
-    // Store selected equipment
+    // Store selected equipment and mode
     pendingOperatingEquipment = eq;
+    pendingOperatingMode = mode;
 
-    // Equipment details
     document.getElementById('operatingEqName').textContent =
         eq.name || '';
 
     document.getElementById('operatingEqCode').textContent =
         `${eq.code || ''} · ${eq.department || ''}`;
 
-    // Current shift
     document.getElementById('operatingShift').textContent =
         currentShift || '';
 
-    // Reset RPM Speed input
+    // Reset inputs
     document.getElementById('actualRpm').value = '';
-
-    // Reset Load Speed input
     document.getElementById('actualLoad').value = '';
 
-    // Reset remarks only if the field exists
     const remarksField = document.getElementById('operatingRemarks');
 
     if (remarksField) {
         remarksField.value = '';
     }
 
-    // Reset Save button
+    // Button text according to mode
     const saveBtn = document.getElementById('saveOperatingBtn');
 
     saveBtn.disabled = false;
-    saveBtn.textContent = 'Save Operating Log';
+
+    saveBtn.textContent = mode === 'running'
+        ? 'Save & Mark RUNNING'
+        : 'Save Operating Log';
 
     // Open popup
     document.getElementById('operatingLogModal').classList.add('open');
@@ -1004,6 +1047,7 @@ function closeOperatingLogModal() {
 
 
 
+
 async function saveOperatingLog() {
 
     if (!pendingOperatingEquipment) {
@@ -1012,15 +1056,15 @@ async function saveOperatingLog() {
     }
 
     const eq = pendingOperatingEquipment;
+    const mode = pendingOperatingMode;
 
-    // Only two inputs
     const actualRpm = document.getElementById('actualRpm').value;
     const actualLoad = document.getElementById('actualLoad').value;
 
     const remarksField = document.getElementById('operatingRemarks');
     const remarks = remarksField ? remarksField.value.trim() : '';
 
-    // Validation
+    // Validate inputs
     if (actualRpm === '' || actualLoad === '') {
         showToast('Please enter RPM Speed and Load Speed', 'error');
         return;
@@ -1043,6 +1087,7 @@ async function saveOperatingLog() {
 
     try {
 
+        // STEP 1: Save operating log (common for Edit and RUNNING)
         const result = await api('/equipment-operating-logs', {
             method: 'POST',
             body: JSON.stringify({
@@ -1054,14 +1099,31 @@ async function saveOperatingLog() {
             })
         });
 
-        showToast(
-            result.message || 'Operating log saved successfully',
-            'success'
-        );
+        // STEP 2: RUNNING mode only
+        if (mode === 'running') {
 
-        closeOperatingLogModal();
+            // Mark equipment RUNNING only after log saved
+            await logStatus(eq.id, 'RUNNING', eq.name);
 
-        await loadEquipment();
+            closeOperatingLogModal();
+
+            showToast(
+                'Operating log saved and equipment marked RUNNING successfully',
+                'success'
+            );
+
+        } else {
+
+            // STEP 3: Existing EDIT flow remains unchanged
+            showToast(
+                result.message || 'Operating log saved successfully',
+                'success'
+            );
+
+            closeOperatingLogModal();
+
+            await loadEquipment();
+        }
 
     } catch (error) {
 
@@ -1075,7 +1137,10 @@ async function saveOperatingLog() {
     } finally {
 
         btn.disabled = false;
-        btn.textContent = 'Save Operating Log';
+
+        btn.textContent = mode === 'running'
+            ? 'Save & Mark RUNNING'
+            : 'Save Operating Log';
     }
 }
 

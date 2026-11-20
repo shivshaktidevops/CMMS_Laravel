@@ -241,6 +241,62 @@
 
   /* dashboard layout css*/
 
+
+  /* Dashboard Toggle layout*/
+
+.dashboard-list-toggle {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 40px;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.dashboard-list-toggle input {
+    display: none;
+}
+
+.dashboard-list-slider {
+    width: 48px;
+    height: 25px;
+    position: relative;
+    background: #cbd5e1;
+    border-radius: 30px;
+    transition: .25s;
+}
+
+.dashboard-list-slider::before {
+    content: "";
+    position: absolute;
+    width: 19px;
+    height: 19px;
+    left: 3px;
+    top: 3px;
+    background: white;
+    border-radius: 50%;
+    transition: .25s;
+}
+
+.dashboard-list-toggle input:checked + .dashboard-list-slider {
+    background: #16a34a;
+}
+
+.dashboard-list-toggle input:checked + .dashboard-list-slider::before {
+    transform: translateX(23px);
+}
+
+#dashboardListStatus {
+    color: #dc2626;
+    font-size: .85rem;
+}
+
+.dashboard-list-toggle input:checked ~ #dashboardListStatus {
+    color: #16a34a;
+}
+
+  /* Dashboard Toggle layout*/
+
 </style>
 </head>
 <body>
@@ -695,6 +751,38 @@
 
 </div>
 
+
+
+<!-- RECENT ACTIVITY DETAILS MODAL -->
+<div class="modal-overlay" id="activityDetailsModal">
+    <div class="modal" style="max-width:750px;width:95%">
+
+        <div class="modal-header">
+            <div class="modal-title">📋 Activity Log Details</div>
+            <button class="modal-close"
+                    onclick="closeModal('activityDetailsModal')">
+                ✕
+            </button>
+        </div>
+
+        <div class="modal-body">
+            <div id="activityDetailsContent">
+                Loading details...
+            </div>
+        </div>
+
+        <div class="modal-footer">
+            <button class="btn btn-outline"
+                    onclick="closeModal('activityDetailsModal')">
+                Close
+            </button>
+        </div>
+
+    </div>
+</div>
+
+
+
 <!-- Equipment Modal -->
 <div class="modal-overlay" id="eqModal">
   <div class="modal">
@@ -735,6 +823,16 @@
         <!-- YAHAN NAYE COLUMNS ADD KIYE GAYE HAIN -->
         <div class="form-group"><label class="form-label">RPM Speed</label><input type="number" step="0.01" class="form-control" id="eqRpmSpeed" placeholder="e.g. 1440"></div>
         <div class="form-group"><label class="form-label">Load Speed</label><input type="number" step="0.01" class="form-control" id="eqLoadSpeed" placeholder="e.g. 75.5"></div>
+        <div class="form-group">
+    <label class="form-label">Dashboard List</label>
+
+    <label class="dashboard-list-toggle">
+        <input type="checkbox" id="eqDashboardList">
+
+        <span class="dashboard-list-slider"></span>
+
+    </label>
+</div>
       </div>
       <!-- Parameters Section -->
       <!-- Hourly Entry toggle — shown only when Dept = Process -->
@@ -1096,6 +1194,26 @@
 
 <script src="../shared/cmms.js"></script>
 <script>
+
+  function updateDashboardListStatus() {
+    const toggle = document.getElementById('eqDashboardList');
+    const status = document.getElementById('dashboardListStatus');
+
+    if (!toggle || !status) return;
+
+    status.textContent = toggle.checked ? 'ON' : 'OFF';
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    const toggle = document.getElementById('eqDashboardList');
+
+    if (toggle) {
+        toggle.addEventListener('change', updateDashboardListStatus);
+        updateDashboardListStatus();
+    }
+});
+
+
 let user;
 
 
@@ -1104,9 +1222,11 @@ let user;
 // ADMIN DASHBOARD
 // ========================================
 
+
 async function loadDashboard() {
 
     const container = document.getElementById('dashboardCards');
+    const summaryContainer = document.getElementById('dashboardEquipmentSummary');
 
     container.innerHTML = `
         <div class="card">Loading dashboard statistics...</div>
@@ -1114,7 +1234,7 @@ async function loadDashboard() {
 
     try {
 
-        // Load existing APIs and new statistics API together
+        // Existing APIs - no API endpoint changed
         const [equipmentResponse, usersResponse, statsResponse] =
             await Promise.all([
                 api('/equipment'),
@@ -1122,11 +1242,24 @@ async function loadDashboard() {
                 api('/admin/dashboard-stats')
             ]);
 
-        const equipment = equipmentResponse.data || [];
-        const users = usersResponse.data || [];
+        const equipment = Array.isArray(equipmentResponse.data)
+            ? equipmentResponse.data
+            : [];
+
+        const users = Array.isArray(usersResponse.data)
+            ? usersResponse.data
+            : [];
+
         const stats = statsResponse.data || {};
 
-        // Equipment counts
+        // Safe HTML escaping
+        const esc = (value) => {
+            const div = document.createElement('div');
+            div.textContent = value ?? '';
+            return div.innerHTML;
+        };
+
+        // Equipment counts - all equipment
         const totalEquipment = equipment.length;
 
         const runningEquipment = equipment.filter(e =>
@@ -1137,6 +1270,12 @@ async function loadDashboard() {
             String(e.current_status || '').toUpperCase() === 'STOPPED'
         ).length;
 
+        // Dashboard List - only dashboard_list = 1
+        const dashboardEquipment = equipment.filter(e =>
+            Number(e.dashboard_list) === 1 ||
+            e.dashboard_list === true
+        );
+
         // User counts
         const totalUsers = users.length;
 
@@ -1144,7 +1283,7 @@ async function loadDashboard() {
             Number(u.active) === 1 || u.active === true
         ).length;
 
-        // Render cards
+        // Existing dashboard cards - unchanged
         const cards = [
             {
                 title: 'Total Equipment',
@@ -1180,20 +1319,6 @@ async function loadDashboard() {
                 icon: '✅',
                 color: '#0891b2',
                 bg: '#ecfeff'
-            },
-            {
-                title: 'Total Shift Logs',
-                value: stats.total_shift_logs ?? 0,
-                icon: '📋',
-                color: '#d97706',
-                bg: '#fffbeb'
-            },
-            {
-                title: "Today's Shift Logs",
-                value: stats.today_shift_logs ?? 0,
-                icon: '📅',
-                color: '#9333ea',
-                bg: '#faf5ff'
             }
         ];
 
@@ -1230,32 +1355,155 @@ async function loadDashboard() {
             </div>
         `).join('');
 
-        // Equipment status overview
-        document.getElementById('dashboardEquipmentSummary').innerHTML = `
-            <div style="display:grid;
-                        grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
-                        gap:1rem">
+        // Dashboard List HTML
 
-                <div style="background:#f0fdf4;padding:1rem;border-radius:8px">
-                    <strong style="color:#15803d">RUNNING</strong>
-                    <div style="font-size:1.6rem;font-weight:800">
-                        ${runningEquipment}
-                    </div>
+const dashboardListHTML = dashboardEquipment.length > 0
+    ? `
+        <div style="overflow-x:auto;margin-top:15px">
+            <table style="width:100%;border-collapse:collapse;
+                          font-size:.82rem;min-width:1200px">
+
+                <thead>
+                    <tr style="background:#f1f5f9;text-align:left">
+                        <th style="padding:12px">#</th>
+                        <th style="padding:12px">Equipment Name</th>
+                        <th style="padding:12px">Equipment Code</th>
+                        <th style="padding:12px">Asset UID</th>
+                        <th style="padding:12px">Machine Tag</th>
+                        <th style="padding:12px">Department</th>
+                        <th style="padding:12px">Type</th>
+                        <th style="padding:12px">Plant</th>
+                        <th style="padding:12px">Capacity</th>
+                        <th style="padding:12px">RPM Speed</th>
+                        <th style="padding:12px">Load Speed</th>
+                        <th style="padding:12px">KW Capacity</th>
+                        <th style="padding:12px">Status</th>
+                        <th style="padding:12px">Location</th>
+                        <th style="padding:12px">Manufacturer</th>
+                        <th style="padding:12px">Serial Number</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    ${dashboardEquipment.map((e, index) => {
+
+                        const status = String(
+                            e.current_status || 'UNKNOWN'
+                        ).toUpperCase();
+
+                        const statusColor =
+                            status === 'RUNNING' ? '#15803d' :
+                            status === 'STOPPED' ? '#dc2626' :
+                            '#64748b';
+
+                        return `
+                            <tr style="border-bottom:1px solid #e2e8f0">
+
+                                <td style="padding:12px">${index + 1}</td>
+
+                                <td style="padding:12px;font-weight:600">
+                                    ${esc(e.name || '-')}
+                                </td>
+
+                                <td style="padding:12px">
+                                    ${esc(e.code || '-')}
+                                </td>
+
+                                <td style="padding:12px">
+                                    ${esc(e.asset_uid || '-')}
+                                </td>
+
+                                <td style="padding:12px">
+                                    ${esc(e.machine_tag || '-')}
+                                </td>
+
+                                <td style="padding:12px">
+                                    ${esc(e.department || '-')}
+                                </td>
+
+                                <td style="padding:12px">
+                                    ${esc(e.type || '-')}
+                                </td>
+
+                                <td style="padding:12px">
+                                    ${esc(e.plant || '-')}
+                                </td>
+
+                                <td style="padding:12px">
+                                    ${esc(e.capacity || '-')}
+                                </td>
+
+                                <td style="padding:12px">
+                                    ${esc(e.rpm_speed ?? '-')}
+                                </td>
+
+                                <td style="padding:12px">
+                                    ${esc(e.load_speed ?? '-')}
+                                </td>
+
+                                <td style="padding:12px">
+                                    ${esc(e.kw_capacity ?? '-')}
+                                </td>
+
+                                <td style="padding:12px">
+                                    <span style="color:${statusColor};font-weight:700">
+                                        ${esc(status)}
+                                    </span>
+                                </td>
+
+                                <td style="padding:12px">
+                                    ${esc(e.location || '-')}
+                                </td>
+
+                                <td style="padding:12px">
+                                    ${esc(e.manufacturer || '-')}
+                                </td>
+
+                                <td style="padding:12px">
+                                    ${esc(e.serial_number || '-')}
+                                </td>
+
+                            </tr>
+                        `;
+                    }).join('')}
+                </tbody>
+
+            </table>
+        </div>
+    `
+    : `
+        <div style="padding:25px;text-align:center;
+                    color:#94a3b8;background:#f8fafc;
+                    border-radius:8px;margin-top:15px">
+            No equipment added to Dashboard List.
+        </div>
+    `;
+
+
+        // Equipment Status Overview + Dashboard List
+        summaryContainer.innerHTML = `
+
+            
+
+            <!-- DASHBOARD LIST -->
+            <div style="margin-top:25px">
+
+                <div style="display:flex;justify-content:space-between;
+                            align-items:center;flex-wrap:wrap;gap:10px">
+
+                    <strong style="font-size:1rem;color:#1e293b">
+                        📋 Dashboard List
+                    </strong>
+
+                    <span style="background:#dbeafe;color:#1d4ed8;
+                                 padding:5px 12px;border-radius:20px;
+                                 font-size:.8rem;font-weight:700">
+                        ${dashboardEquipment.length} Equipment
+                    </span>
+
                 </div>
 
-                <div style="background:#fef2f2;padding:1rem;border-radius:8px">
-                    <strong style="color:#dc2626">STOPPED</strong>
-                    <div style="font-size:1.6rem;font-weight:800">
-                        ${stoppedEquipment}
-                    </div>
-                </div>
-
-                <div style="background:#eff6ff;padding:1rem;border-radius:8px">
-                    <strong style="color:#2563eb">TOTAL</strong>
-                    <div style="font-size:1.6rem;font-weight:800">
-                        ${totalEquipment}
-                    </div>
-                </div>
+                ${dashboardListHTML}
 
             </div>
         `;
@@ -1269,11 +1517,19 @@ async function loadDashboard() {
 
         container.innerHTML = `
             <div class="card" style="color:#dc2626">
-                Unable to load dashboard: ${error.message}
+                Unable to load dashboard: ${escDashboardError(error.message)}
             </div>
         `;
     }
 }
+
+// Safe error message
+function escDashboardError(value) {
+    const div = document.createElement('div');
+    div.textContent = value ?? '';
+    return div.innerHTML;
+}
+
 
 
 
@@ -1288,6 +1544,7 @@ function escapeActivityText(value) {
     div.textContent = value ?? '';
     return div.innerHTML;
 }
+
 
 async function loadDashboardActivity() {
 
@@ -1306,9 +1563,18 @@ async function loadDashboardActivity() {
 
         const response = await api('/admin/audit-log');
 
-        dashboardActivityLogs = Array.isArray(response.data)
+        const allLogs = Array.isArray(response.data)
             ? response.data
             : [];
+
+        // LOGIN logs hide only from Recent Activity
+        dashboardActivityLogs = allLogs.filter(log => {
+            const action = String(log.action || '').trim().toUpperCase();
+
+            return action !== 'LOGIN' &&
+                   action !== 'USER_LOGIN' &&
+                   !action.startsWith('LOGIN_');
+        });
 
         count.textContent = dashboardActivityLogs.length;
 
@@ -1323,10 +1589,11 @@ async function loadDashboardActivity() {
 
         const recentLogs = dashboardActivityLogs.slice(0, 20);
 
-        container.innerHTML = recentLogs.map(log => `
+        container.innerHTML = recentLogs.map((log, index) => `
 
             <div class="activity-item"
-                 onclick="viewAllDashboardLogs()">
+                 onclick="openActivityDetails(${index})"
+                 style="cursor:pointer">
 
                 <div class="activity-title">
                     📋 ${escapeActivityText(log.action || 'System Activity')}
@@ -1355,6 +1622,10 @@ async function loadDashboardActivity() {
                     )}
                 </div>
 
+                <div style="color:#2563eb;font-size:12px;margin-top:8px">
+                    View Details →
+                </div>
+
             </div>
 
         `).join('');
@@ -1373,6 +1644,157 @@ async function loadDashboardActivity() {
             </div>
         `;
     }
+}
+
+
+/* ========================================
+   OPEN ACTIVITY DETAILS POPUP
+======================================== */
+
+function openActivityDetails(index) {
+
+    const log = dashboardActivityLogs[index];
+
+    if (!log) {
+        console.error('Activity log not found:', index);
+        return;
+    }
+
+    const modal = document.getElementById('activityDetailsModal');
+    const content = document.getElementById('activityDetailsContent');
+
+    if (!modal || !content) {
+        console.error('Activity details modal HTML not found');
+        return;
+    }
+
+    // Hide sensitive information
+    const sensitiveKeys = [
+        'password',
+        'current_password',
+        'new_password',
+        'token',
+        'access_token',
+        'refresh_token',
+        'secret',
+        'api_key'
+    ];
+
+    function sanitize(value, key = '') {
+
+        if (sensitiveKeys.includes(key.toLowerCase())) {
+            return '[HIDDEN]';
+        }
+
+        if (Array.isArray(value)) {
+            return value.map(item => sanitize(item));
+        }
+
+        if (value && typeof value === 'object') {
+            const result = {};
+
+            Object.entries(value).forEach(([k, v]) => {
+                result[k] = sanitize(v, k);
+            });
+
+            return result;
+        }
+
+        return value;
+    }
+
+    const safeLog = sanitize(log);
+
+    let html = `
+        <div style="
+            background:#eff6ff;
+            border-radius:8px;
+            padding:15px;
+            margin-bottom:15px;
+        ">
+            <div style="font-size:12px;color:#64748b">
+                ACTIVITY ACTION
+            </div>
+
+            <div style="
+                font-size:18px;
+                font-weight:700;
+                color:#1d4ed8;
+                margin-top:5px;
+            ">
+                ${escapeActivityText(log.action || 'System Activity')}
+            </div>
+        </div>
+
+        <div style="
+            border:1px solid #e2e8f0;
+            border-radius:8px;
+            overflow:hidden;
+        ">
+    `;
+
+    Object.entries(safeLog).forEach(([key, value]) => {
+
+        if (value === null || value === undefined || value === '') {
+            return;
+        }
+
+        const isObject = typeof value === 'object';
+
+        let displayValue = isObject
+            ? JSON.stringify(value, null, 2)
+            : String(value);
+
+        html += `
+            <div style="
+                display:grid;
+                grid-template-columns:180px minmax(0,1fr);
+                gap:12px;
+                padding:12px;
+                border-bottom:1px solid #e2e8f0;
+                align-items:start;
+            ">
+
+                <strong style="
+                    font-size:13px;
+                    color:#475569;
+                    overflow-wrap:anywhere;
+                ">
+                    ${escapeActivityText(
+                        key.replace(/_/g, ' ').toUpperCase()
+                    )}
+                </strong>
+
+                <div style="
+                    font-size:13px;
+                    color:#1e293b;
+                    overflow-wrap:anywhere;
+                    white-space:pre-wrap;
+                ">
+                    ${
+                        isObject
+                            ? `<pre style="
+                                margin:0;
+                                padding:10px;
+                                background:#f8fafc;
+                                border-radius:6px;
+                                white-space:pre-wrap;
+                                overflow-wrap:anywhere;
+                                font-size:12px;
+                            ">${escapeActivityText(displayValue)}</pre>`
+                            : escapeActivityText(displayValue)
+                    }
+                </div>
+
+            </div>
+        `;
+    });
+
+    html += '</div>';
+
+    content.innerHTML = html;
+
+    modal.classList.add('open');
 }
 
 
@@ -2115,6 +2537,7 @@ async function deleteEquipment(id) {
 
 async function openEqModal() {
   document.getElementById('eqId').value = '';
+  document.getElementById('eqDashboardList').checked = false;
   ['eqCode','eqName','eqType','eqLocation','eqAssetUid','eqMachineTag','eqSerialNumber','eqManufacturer','eqModelNumber','eqCommissionedAt','eqCriticalDowntime','eqRpmSpeed','eqLoadSpeed'].forEach(f => document.getElementById(f).value = '');
   document.getElementById('eqLocationId').value = ''; document.getElementById('eqParentEquipment').value = '';
   document.getElementById('eqDept').value  = '';
@@ -2145,6 +2568,8 @@ async function editEquipment(id) {
   // YAHAN NAYE COLUMNS ADD KAREIN
   document.getElementById('eqRpmSpeed').value = e.rpm_speed || '';
   document.getElementById('eqLoadSpeed').value = e.load_speed || '';
+  document.getElementById('eqDashboardList').checked =
+    Number(e.dashboard_list) === 1;
   await loadEqDropdowns();
   document.getElementById('eqPlant').value = e.plant || '';
   document.getElementById('eqDept').value  = e.department || '';  // set FIRST
@@ -2334,6 +2759,7 @@ async function saveEquipment() {
     // YAHAN NAYE COLUMNS ADD KAREIN
     rpm_speed: document.getElementById('eqRpmSpeed').value || null,
     load_speed: document.getElementById('eqLoadSpeed').value || null,
+    dashboard_list: document.getElementById('eqDashboardList').checked ? 1 : 0,
   };
 
   if (!body.code || !body.name || !body.department || !body.plant) {
@@ -3780,18 +4206,39 @@ async function exportAuditCSV() {
 }
 
 // ── HELPER: Format date time ─────────────────────────────────────
+
 function formatDateTime(timestamp) {
-  if (!timestamp) return '—';
-  const date = new Date(timestamp);
-  return date.toLocaleString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  });
+
+    if (!timestamp) return '—';
+
+    let value = String(timestamp).trim();
+
+    // If timestamp has no timezone information,
+    // treat it as UTC.
+    const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value);
+
+    if (!hasTimezone) {
+        value = value.replace(' ', 'T') + 'Z';
+    }
+
+    const date = new Date(value);
+
+    if (isNaN(date.getTime())) {
+        return 'Invalid Date';
+    }
+
+    return date.toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+    });
 }
+
 
 init();
 </script>

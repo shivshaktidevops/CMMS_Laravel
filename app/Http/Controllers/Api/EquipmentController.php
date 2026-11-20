@@ -278,6 +278,7 @@ class EquipmentController extends Controller
             'capacity' => $request->input('capacity', $existing?->capacity) ?: null,
             'plant' => $plant ?: '100TPD',
             'hourly_entry' => $request->boolean('hourly_entry', (bool) ($existing?->hourly_entry ?? false)),
+            'dashboard_list' => $request->boolean('dashboard_list',(bool) ($existing?->dashboard_list ?? false)),
             'kw_capacity' => $this->nullableNumber($request->has('kw_capacity') ? $request->input('kw_capacity') : $existing?->kw_capacity),
             'load_100pct' => $this->nullableNumber($request->has('load_100pct') ? $request->input('load_100pct') : $existing?->load_100pct),
             'critical_load' => $this->nullableNumber($request->has('critical_load') ? $request->input('critical_load') : $existing?->critical_load),
