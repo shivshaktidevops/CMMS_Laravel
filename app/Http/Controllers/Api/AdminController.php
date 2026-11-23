@@ -93,6 +93,7 @@ return response()->json(['success' => true, 'data' => DB::table('users')->select
             'description' => 'required|string|max:255',
             'category' => 'nullable|string|max:100',
             'remark' => 'nullable|string',
+            'take_time_minutes' => 'nullable|integer|min:0',
         ]);
 
         if ($validator->fails()) {
@@ -111,6 +112,7 @@ return response()->json(['success' => true, 'data' => DB::table('users')->select
                                     ? trim($r->remark)
                                     : null,
                 'category' => $r->category,
+                'take_time_minutes' => $r->input('take_time_minutes'),
                 'active' => 1,
                 'created_at' => now(),
             ]);
@@ -167,6 +169,7 @@ return response()->json(['success' => true, 'data' => $row]);
             'description' => 'required|string|max:255',
             'category' => 'nullable|string|max:100',
             'remark' => 'nullable|string',
+            'take_time_minutes' => 'nullable|integer|min:0',
             'active' => 'required|boolean',
         ]);
 
@@ -190,6 +193,7 @@ return response()->json(['success' => true, 'data' => $row]);
                                         ? trim($r->remark)
                                         : null,
                     'active' => (bool) $r->active,
+                    'take_time_minutes' => $r->input('take_time_minutes'),
                 ]);
 
             // Get updated record

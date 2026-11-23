@@ -60,6 +60,12 @@ $register = function (string $prefix = '') {
                 [EquipmentOperatingLogController::class, 'history']
             )->middleware('role:operator,admin');
 
+            // Get all operating logs of particular equipment
+Route::get(
+    '/equipment/{equipment}/operating-logs',
+    [EquipmentOperatingLogController::class, 'history']
+)->middleware('role:operator,maintenance,management,admin');
+
             // Equipment Operating Logs
             Route::middleware('role:operator,admin')->group(function () {
 
@@ -129,6 +135,18 @@ $register = function (string $prefix = '') {
             Route::get('/shift-logs/stop-reasons', [ShiftLogController::class, 'stopReasons']);
             Route::get('/shift-logs', [ShiftLogController::class, 'index'])->middleware('role:management,admin');
             Route::post('/shift-logs', [ShiftLogController::class, 'store'])->middleware('role:operator,admin');
+            // All Equipment Activity History
+            Route::get('/shift-logs/history', [ShiftLogController::class, 'history'])->middleware('role:maintenance,management,admin');
+
+            Route::get('/shift-logs/{id}/replies', [
+                ShiftLogController::class,
+                'getReplies'
+            ]);
+
+            Route::post('/shift-logs/{id}/replies', [
+                ShiftLogController::class,
+                'storeReply'
+            ]);
 
             // Breakdowns
             Route::middleware('role:maintenance,management,admin')->group(function () {

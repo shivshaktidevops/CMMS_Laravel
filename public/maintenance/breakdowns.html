@@ -169,6 +169,12 @@
     <button class="tab-btn" onclick="switchTab('genjobs',this)" id="genJobsTabBtn" style="display:none">
         🏭 General Shift Jobs <span id="genJobsBadge" style="background:#f59e0b;color:#fff;border-radius:10px;padding:1px 7px;font-size:.7rem;margin-left:4px;display:none">0</span>
     </button>
+
+    <button class="tab-btn"
+            onclick="switchTab('equipmentactivity', this)"
+            id="equipmentActivityTabBtn">
+        📋 Equipment Activity
+    </button>
 </div>
 
   <!-- ══════════════════════════════════════════════════════
@@ -343,7 +349,47 @@
       </div>
 
     </div>
-  </div>	
+  </div>
+
+
+  <!-- EQUIPMENT ACTIVITY TAB -->
+<div class="tab-content" id="tab-equipmentactivity">
+
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;margin-bottom:1rem;">
+
+        <div>
+            <div class="page-title" style="margin:0">
+                📋 All Equipment Activity
+            </div>
+            <div style="font-size:.8rem;color:#64748b;margin-top:.3rem">
+                Complete RUNNING / STOPPED history across all dates
+            </div>
+        </div>
+
+        <button class="btn btn-primary btn-sm"
+                onclick="loadEquipmentActivity()">
+            🔄 Refresh
+        </button>
+    </div>
+
+    <!-- Date filters -->
+<div class="card" style="padding:1rem;margin-bottom:1rem;">
+    <label class="form-label">Search Equipment</label>
+    <input
+        type="text"
+        id="activityEquipmentSearch"
+        class="form-control"
+        placeholder="Search by equipment name, code or department..."
+        oninput="renderEquipmentActivity()"
+    >
+</div>
+
+    <div id="equipmentActivityContainer">
+        <div class="loading">Click Equipment Activity to load history...</div>
+    </div>
+
+</div>
+<!-- END EQUIPMENT ACTIVITY TAB -->	
 
 </div><!-- end .page -->
 
@@ -633,6 +679,61 @@
     </div>
   </div>
 </div>
+
+
+
+
+<!-- EQUIPMENT OPERATING LOG HISTORY MODAL -->
+<div class="modal-overlay" id="operatingHistoryModal">
+    <div class="modal" style="width:95%;max-width:950px;">
+        <div class="modal-header">
+            <div class="modal-title">📋 Equipment Operating Log History</div>
+            <button class="modal-close" onclick="closeOperatingHistoryModal()">✕</button>
+        </div>
+        <div class="modal-body">
+            <div style="padding:12px;background:#eff6ff;border-radius:8px;margin-bottom:15px;">
+                <strong id="historyEqName"></strong>
+                <div id="historyEqCode" style="font-size:13px;color:#64748b;margin-top:4px;"></div>
+                <div id="historyLogCount" style="font-size:13px;color:#1e40af;margin-top:6px;"></div>
+            </div>
+            <div id="operatingHistoryContent" style="overflow-x:auto;">
+                <div class="loading">Loading operating logs...</div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeOperatingHistoryModal()">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- OPERATING LOG REPLY CHAT MODAL (WHATSAPP STYLE) -->
+<div class="modal-overlay" id="operatingReplyModal">
+    <div class="modal" style="width:95%;max-width:650px;">
+        <div class="modal-header">
+            <div class="modal-title">💬 Stop Log Communication</div>
+            <button class="modal-close" onclick="closeOperatingReplyModal()">✕</button>
+        </div>
+        <div class="modal-body">
+            <div style="padding:12px;background:#eff6ff;border-radius:8px;margin-bottom:15px;">
+                <strong id="operatingReplyTitle">Stop Log Chat</strong>
+                <div id="operatingReplyInfo" style="font-size:13px;color:#64748b;margin-top:5px;"></div>
+            </div>
+            <div id="operatingReplyMessages" style="height:320px;overflow-y:auto;padding:12px;background:#efeae2;border-radius:8px;">
+                Loading messages...
+            </div>
+            <div style="display:flex;gap:10px;margin-top:12px;">
+                <textarea id="operatingReplyInput" class="form-control" rows="2" maxlength="2000" placeholder="Write your message..." style="flex:1;"></textarea>
+                <button class="btn btn-primary" id="sendOperatingReplyBtn" onclick="sendOperatingReply()">Send</button>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeOperatingReplyModal()">Close</button>
+        </div>
+    </div>
+</div>
+
+
+
 
 <script src="../shared/cmms.js"></script>
 <script>
@@ -1155,6 +1256,300 @@ function switchTab(tab, btn) {
   document.getElementById('tab-' + tab).classList.add('active');
   if (tab === 'jobs') loadJobs();
   if (tab === 'genjobs') loadGenJobs();
+  if (tab === 'equipmentactivity') loadEquipmentActivity();
+}
+
+
+// ============================================================
+// EQUIPMENT ACTIVITY - SAME EQUIPMENT API AS OPERATOR PANEL
+// ============================================================
+
+let allEquipmentActivity = [];
+
+async function loadEquipmentActivity() {
+
+    const container = document.getElementById('equipmentActivityContainer');
+
+    container.innerHTML = `
+        <div class="loading">Loading equipment...</div>
+    `;
+
+    try {
+
+        const plant = user.selectedPlant || user.plant || '';
+
+        const qs = plant
+            ? `?plant=${encodeURIComponent(plant)}`
+            : '';
+
+        // SAME API used by operator/shift-log.html
+        const response = await api(`/equipment${qs}`);
+
+        allEquipmentActivity = Array.isArray(response.data)
+            ? response.data
+            : [];
+
+        renderEquipmentActivity();
+
+    } catch (error) {
+
+        console.error('Equipment Activity Error:', error);
+
+        container.innerHTML = `
+            <div class="empty-state">
+                <p>❌ Failed to load equipment.</p>
+                <p>${escapeHtml(error.message)}</p>
+            </div>
+        `;
+    }
+}
+
+
+// ============================================================
+// RENDER EQUIPMENT CARDS
+// ============================================================
+
+function renderEquipmentActivity() {
+
+    const container = document.getElementById('equipmentActivityContainer');
+
+    const search = (
+        document.getElementById('activityEquipmentSearch')?.value || ''
+    ).toLowerCase().trim();
+
+    let filtered = [...allEquipmentActivity];
+
+    // Maintenance user sees their own department.
+    // Management/Admin can see all departments.
+    if (user.role === 'maintenance' && user.department) {
+
+        const department = String(user.department).trim().toLowerCase();
+
+        filtered = filtered.filter(eq =>
+            String(eq.department || '').trim().toLowerCase() === department
+        );
+    }
+
+    // Search filter
+    if (search) {
+        filtered = filtered.filter(eq =>
+            String(eq.name || '').toLowerCase().includes(search) ||
+            String(eq.code || '').toLowerCase().includes(search) ||
+            String(eq.department || '').toLowerCase().includes(search) ||
+            String(eq.location || '').toLowerCase().includes(search)
+        );
+    }
+
+    if (!filtered.length) {
+
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="icon">📋</div>
+                <p>No equipment found.</p>
+            </div>
+        `;
+
+        return;
+    }
+
+    let html = `
+        <div style="
+            display:grid;
+            grid-template-columns:repeat(auto-fill,minmax(290px,1fr));
+            gap:1rem;
+        ">
+    `;
+
+    filtered.forEach(eq => {
+
+        const running = eq.current_status === 'RUNNING';
+
+        const name = escapeHtml(eq.name || '—');
+        const code = escapeHtml(eq.code || '—');
+        const department = escapeHtml(eq.department || '—');
+        const location = escapeHtml(eq.location || eq.department || '—');
+
+        const standardRpm = eq.standard_rpm ?? '—';
+        const actualRpm = eq.latest_actual_rpm ?? '—';
+
+        const standardLoad = eq.standard_load ?? '—';
+        const actualLoad = eq.latest_actual_load ?? '—';
+
+        const lastJob = escapeHtml(eq.last_job_title || 'No history');
+
+        const lastJobDate = eq.last_job_closed_at
+            ? fmtDate(eq.last_job_closed_at)
+            : '';
+
+        const lastLog = eq.latest_logged_at
+            ? fmtDate(eq.latest_logged_at)
+            : 'No logs';
+
+        const lastShift = eq.latest_shift
+            ? ` · Shift ${escapeHtml(eq.latest_shift)}`
+            : '';
+
+        const downMins = eq.current_downtime_min
+            ? parseInt(eq.current_downtime_min, 10)
+            : 0;
+
+        const bdNumber = escapeHtml(eq.open_bd_number || '');
+
+        const statusStyle = running
+            ? 'background:#dcfce7;color:#166534;'
+            : 'background:#fee2e2;color:#991b1b;';
+
+        html += `
+            <div style="
+                background:${running ? '#f0fdf4' : '#fff5f5'};
+                border:1.5px solid ${running ? '#86efac' : '#fca5a5'};
+                border-radius:10px;
+                padding:1rem;
+                box-shadow:0 3px 8px rgba(0,0,0,.06);
+                display:flex;
+                flex-direction:column;
+                justify-content:space-between;
+            ">
+                <div>
+                    <div style="
+                        display:flex;
+                        justify-content:space-between;
+                        align-items:flex-start;
+                        gap:.5rem;
+                    ">
+                        <div>
+                            <div style="font-weight:700;font-size:.95rem;color:#0f172a;">
+                                ${name}
+                            </div>
+
+                            <div style="font-size:.78rem;color:#64748b;margin-top:.25rem;">
+                                ${code} · ${location}
+                            </div>
+                        </div>
+
+                        <span style="
+                            ${statusStyle}
+                            padding:.3rem .65rem;
+                            border-radius:20px;
+                            font-size:.7rem;
+                            font-weight:700;
+                            white-space:nowrap;
+                        ">
+                            ${running ? 'RUNNING' : 'STOPPED'}
+                        </span>
+                    </div>
+
+                    <div style="
+                        margin-top:.65rem;
+                        padding-top:.55rem;
+                        border-top:1px dashed #e2e8f0;
+                        font-size:.78rem;
+                        line-height:1.7;
+                        color:#475569;
+                    ">
+
+                        <div>
+                            RPM &nbsp; Std:
+                            <strong>${standardRpm}</strong>
+                            &nbsp; | &nbsp; Running:
+                            <strong>${actualRpm}</strong>
+                        </div>
+
+                        <div>
+                            Load &nbsp; Std:
+                            <strong>${standardLoad}</strong>
+                            &nbsp; | &nbsp; Running:
+                            <strong>${actualLoad}</strong>
+                        </div>
+
+                        <div style="margin-top:.4rem;">
+                            Last Job:
+                            <strong>${lastJob}</strong>
+                            ${lastJobDate ? ` · ${lastJobDate}` : ''}
+                        </div>
+
+                        <div style="margin-top:.25rem;color:#0369a1;">
+                            Last Log:
+                            ${lastLog}${lastShift}
+                        </div>
+
+                        ${!running ? `
+                            <div style="
+                                margin-top:.4rem;
+                                color:#dc2626;
+                                font-weight:600;
+                            ">
+                                ⏱ Down: ${fmtDuration(downMins)}
+                                ${bdNumber ? ` · ${bdNumber}` : ''}
+                            </div>
+                        ` : ''}
+
+                        <div style="margin-top:.25rem;color:#64748b;">
+                            Department: ${department}
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- Only View Button -->
+                <div style="
+                    margin-top:.85rem;
+                    padding-top:.65rem;
+                    border-top:1px solid #e2e8f0;
+                    display:flex;
+                ">
+                    <button type="button"
+                        class="btn btn-outline btn-sm"
+                        style="width:30%;background:#fff;border-color:#cbd5e1;color:#1e293b;font-weight:600;"
+                        onclick="viewEquipmentActivityLogs(${Number(eq.id)})">
+                        👁 View
+                    </button>
+                </div>
+
+            </div>
+        `;
+    });
+
+    html += '</div>';
+
+    container.innerHTML = html;
+}
+
+
+function clearActivityDates() {
+
+    document.getElementById('activityFromDate').value = '';
+    document.getElementById('activityToDate').value = '';
+
+    loadEquipmentActivity();
+}
+
+function escapeActivityHtml(value) {
+
+    const div = document.createElement('div');
+
+    div.textContent = value == null ? '' : String(value);
+
+    return div.innerHTML;
+}
+
+function formatActivityDate(value) {
+
+    if (!value) return '—';
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) return '—';
+
+    return date.toLocaleString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+        timeZone: 'Asia/Kolkata'
+    });
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -2432,6 +2827,303 @@ function closeJobDetail() {
   document.getElementById('jobDetailModal').classList.remove('open');
 }
 
+
+// ============================================================
+// OPERATING LOG HISTORY & STOP CHAT (WHATSAPP STYLE)
+// ============================================================
+
+function escapeChatHtml(value) {
+    const div = document.createElement('div');
+    div.textContent = value ?? '';
+    return div.innerHTML;
+}
+
+function formatDateTimeIST(value) {
+    if (!value) return '—';
+
+    let dateString = String(value).trim();
+
+    if (
+        !dateString.endsWith('Z') &&
+        !/[+-]\d{2}:?\d{2}$/.test(dateString)
+    ) {
+        dateString = dateString.replace(' ', 'T') + 'Z';
+    }
+
+    const date = new Date(dateString);
+
+    if (Number.isNaN(date.getTime())) {
+        return String(value);
+    }
+
+    return new Intl.DateTimeFormat('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+    }).format(date);
+}
+
+async function viewEquipmentActivityLogs(eqId) {
+    const eq = allEquipmentActivity.find(
+        item => Number(item.id) === Number(eqId)
+    );
+
+    if (!eq) {
+        showToast('Equipment not found', 'error');
+        return;
+    }
+
+    document.getElementById('historyEqName').textContent = eq.name || '';
+    document.getElementById('historyEqCode').textContent =
+        `${eq.code || ''} · ${eq.department || ''}`;
+    document.getElementById('historyLogCount').textContent = 'Loading logs...';
+    document.getElementById('operatingHistoryContent').innerHTML = `
+        <div class="loading">Loading operating logs...</div>
+    `;
+
+    document.getElementById('operatingHistoryModal').classList.add('open');
+
+    try {
+        const response = await api(`/equipment/${eqId}/operating-logs`);
+        const logs = Array.isArray(response.data) ? response.data : [];
+
+        document.getElementById('historyLogCount').textContent =
+            `Total Logs: ${logs.length}`;
+
+        if (logs.length === 0) {
+            document.getElementById('operatingHistoryContent').innerHTML = `
+                <div class="empty-state">No operating logs found.</div>
+            `;
+            return;
+        }
+
+        document.getElementById('operatingHistoryContent').innerHTML = `
+            <table style="width:100%;border-collapse:collapse;min-width:820px;">
+                <thead>
+                    <tr style="background:#f1f5f9;text-align:left;">
+                        <th style="padding:10px;">#</th>
+                        <th style="padding:10px;">Status</th>
+                        <th style="padding:10px;">RPM Speed</th>
+                        <th style="padding:10px;">Load Speed</th>
+                        <th style="padding:10px;">Shift</th>
+                        <th style="padding:10px;">Logged By</th>
+                        <th style="padding:10px;">Date &amp; Time</th>
+                        <th style="padding:10px;">Remarks</th>
+                        <th style="padding:10px;">Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${logs.map((log, index) => {
+                        const isRpmLoadNull = (log.actual_rpm === null || log.actual_rpm === '' || log.actual_rpm === undefined)
+                            && (log.actual_load === null || log.actual_load === '' || log.actual_load === undefined);
+
+                        const isStopped = isRpmLoadNull || String(log.status || '').toUpperCase() === 'STOPPED';
+
+                        const statusBadge = isStopped
+                            ? `<span style="background:#fee2e2;color:#991b1b;padding:3px 8px;border-radius:12px;font-size:12px;font-weight:700;">STOPPED</span>`
+                            : `<span style="background:#dcfce7;color:#166534;padding:3px 8px;border-radius:12px;font-size:12px;font-weight:700;">RUNNING</span>`;
+
+                        return `
+                        <tr>
+                            <td style="padding:10px;border-top:1px solid #e2e8f0;">${index + 1}</td>
+                            <td style="padding:10px;border-top:1px solid #e2e8f0;">${statusBadge}</td>
+                            <td style="padding:10px;border-top:1px solid #e2e8f0;">${escapeChatHtml(log.actual_rpm ?? '—')}</td>
+                            <td style="padding:10px;border-top:1px solid #e2e8f0;">${escapeChatHtml(log.actual_load ?? '—')}</td>
+                            <td style="padding:10px;border-top:1px solid #e2e8f0;">${escapeChatHtml(log.shift)}</td>
+                            <td style="padding:10px;border-top:1px solid #e2e8f0;">${escapeChatHtml(log.logged_by_name || log.logged_by || '—')}</td>
+                            <td style="padding:10px;border-top:1px solid #e2e8f0;">${escapeChatHtml(formatDateTimeIST(log.logged_at))}</td>
+                            <td style="padding:10px;border-top:1px solid #e2e8f0;">${escapeChatHtml(log.remarks || '—')}</td>
+                            <td style="padding:10px;border-top:1px solid #e2e8f0;">
+                                ${isStopped && log.shift_log_id ? `
+                                    <button class="btn btn-primary btn-sm" onclick="openOperatingReplyModal(${Number(log.shift_log_id)})">
+                                        💬 Reply
+                                    </button>
+                                ` : '—'}
+                            </td>
+                        </tr>`;
+                    }).join('')}
+                </tbody>
+            </table>
+        `;
+    } catch (error) {
+        console.error('Operating History Error:', error);
+        document.getElementById('operatingHistoryContent').innerHTML = `
+            <div style="color:#dc2626;padding:12px;">
+                Unable to load operating logs: ${escapeChatHtml(error.message)}
+            </div>
+        `;
+    }
+}
+
+function closeOperatingHistoryModal() {
+    document.getElementById('operatingHistoryModal').classList.remove('open');
+}
+
+async function openLatestStopChat(eqId) {
+    try {
+        const response = await api(`/equipment/${eqId}/operating-logs`);
+        const logs = Array.isArray(response.data) ? response.data : [];
+
+        const stopLog = logs.find(l => l.shift_log_id !== null && l.shift_log_id !== undefined);
+
+        if (!stopLog) {
+            showToast('No stop log found for chat', 'error');
+            return;
+        }
+
+        openOperatingReplyModal(stopLog.shift_log_id);
+    } catch (error) {
+        showToast(error.message || 'Unable to open chat', 'error');
+    }
+}
+
+let activeOperatingReplyLogId = null;
+let replyPollTimer = null;
+
+async function openOperatingReplyModal(shiftLogId) {
+    activeOperatingReplyLogId = Number(shiftLogId);
+
+    document.getElementById('operatingReplyTitle').textContent =
+        `Stop Log Chat #${shiftLogId}`;
+
+    const box = document.getElementById('operatingReplyMessages');
+    box.style.background = '#efeae2';
+    box.innerHTML = '<p style="text-align:center;color:#64748b;">Loading messages...</p>';
+
+    document.getElementById('operatingReplyModal').classList.add('open');
+
+    await loadOperatingReplies(true);
+
+    if (replyPollTimer) clearInterval(replyPollTimer);
+    replyPollTimer = setInterval(() => loadOperatingReplies(false), 5000);
+}
+
+function closeOperatingReplyModal() {
+    document.getElementById('operatingReplyModal').classList.remove('open');
+    activeOperatingReplyLogId = null;
+    if (replyPollTimer) {
+        clearInterval(replyPollTimer);
+        replyPollTimer = null;
+    }
+}
+
+async function loadOperatingReplies(scrollToBottom = false) {
+    if (!activeOperatingReplyLogId) return;
+
+    try {
+        const response = await api(
+            `/shift-logs/${activeOperatingReplyLogId}/replies`
+        );
+
+        const replies = response.data?.replies || [];
+        const container = document.getElementById('operatingReplyMessages');
+
+        document.getElementById('operatingReplyInfo').textContent =
+            `Shift Log ID: #${activeOperatingReplyLogId} | Messages: ${replies.length}`;
+
+        if (!replies.length) {
+            container.innerHTML =
+                '<p style="text-align:center;color:#64748b;margin-top:20px;">No messages yet. Start the conversation.</p>';
+            return;
+        }
+
+        const wasNearBottom =
+            container.scrollHeight - container.scrollTop - container.clientHeight < 60;
+
+        container.innerHTML = replies.map(reply => {
+            const isMine = Number(reply.user_id) === Number(user.id);
+            const roleLabel = reply.role === 'maintenance'
+                ? 'HOD'
+                : reply.role === 'operator'
+                    ? 'Shift-in-Charge'
+                    : (reply.role || '');
+
+            return `
+                <div style="display:flex;justify-content:${isMine ? 'flex-end' : 'flex-start'};margin-bottom:10px;">
+                    <div style="
+                        max-width:78%;
+                        padding:8px 12px;
+                        background:${isMine ? '#d9fdd3' : '#ffffff'};
+                        color:#111b21;
+                        border-radius:${isMine ? '12px 12px 2px 12px' : '12px 12px 12px 2px'};
+                        box-shadow:0 1px 2px rgba(0,0,0,0.12);
+                    ">
+                        <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
+                            <strong style="font-size:12px;color:${isMine ? '#075e54' : '#1e40af'};">
+                                ${isMine ? 'You' : escapeChatHtml(reply.user_name || 'User')}
+                            </strong>
+                            <span style="font-size:10px;background:#e2e8f0;color:#475569;padding:1px 6px;border-radius:10px;">
+                                ${escapeChatHtml(roleLabel)}
+                            </span>
+                        </div>
+                        <div style="white-space:pre-wrap;word-break:break-word;font-size:13.5px;line-height:1.4;">
+                            ${escapeChatHtml(reply.message || '')}
+                        </div>
+                        <div style="text-align:right;font-size:10.5px;color:#667781;margin-top:4px;">
+                            ${escapeChatHtml(formatDateTimeIST(reply.sent_at))}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        if (scrollToBottom || wasNearBottom) {
+            container.scrollTop = container.scrollHeight;
+        }
+    } catch (error) {
+        console.error(error);
+        document.getElementById('operatingReplyMessages').innerHTML =
+            `<p style="color:#dc2626;text-align:center;">${escapeChatHtml(error.message || 'Unable to load messages')}</p>`;
+    }
+}
+
+async function sendOperatingReply() {
+    if (!activeOperatingReplyLogId) return;
+
+    const input = document.getElementById('operatingReplyInput');
+    const btn = document.getElementById('sendOperatingReplyBtn');
+    const message = input.value.trim();
+
+    if (!message) {
+        showToast('Please enter a message', 'error');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Sending...';
+
+    try {
+        const response = await api(
+            `/shift-logs/${activeOperatingReplyLogId}/replies`,
+            {
+                method: 'POST',
+                body: JSON.stringify({ message })
+            }
+        );
+
+        if (response.success) {
+            input.value = '';
+            await loadOperatingReplies(true);
+        }
+    } catch (error) {
+        showToast(error.message || 'Unable to send reply', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Send';
+    }
+}
+
+document.getElementById('operatingReplyInput')?.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendOperatingReply();
+    }
+});
 
 function logout() { clearSession(); window.location.href = '../login.html'; }
 

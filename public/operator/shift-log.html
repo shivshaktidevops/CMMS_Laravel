@@ -372,6 +372,67 @@
 </div>
 <!-- END EQUIPMENT OPERATING LOG HISTORY MODAL -->
 
+
+
+<!-- OPERATING LOG REPLY CHAT MODAL -->
+<div class="modal-overlay" id="operatingReplyModal">
+    <div class="modal" style="width:95%;max-width:650px;">
+
+        <div class="modal-header">
+            <div class="modal-title">💬 Operating Log Communication</div>
+
+            <button class="modal-close"
+                    onclick="closeOperatingReplyModal()">
+                ✕
+            </button>
+        </div>
+
+        <div class="modal-body">
+
+            <div style="padding:12px;background:#eff6ff;border-radius:8px;margin-bottom:15px;">
+                <strong id="operatingReplyTitle">Operating Log</strong>
+
+                <div id="operatingReplyInfo"
+                     style="font-size:13px;color:#64748b;margin-top:5px;">
+                </div>
+            </div>
+
+            <div id="operatingReplyMessages"
+                 style="height:300px;overflow-y:auto;padding:12px;background:#f8fafc;border-radius:8px;">
+                Loading messages...
+            </div>
+
+            <div style="display:flex;gap:10px;margin-top:12px;">
+                <textarea
+                    id="operatingReplyInput"
+                    class="form-control"
+                    rows="2"
+                    maxlength="2000"
+                    placeholder="Write your message..."
+                    style="flex:1;">
+                </textarea>
+
+                <button class="btn btn-primary"
+                        id="sendOperatingReplyBtn"
+                        onclick="sendOperatingReply()">
+                    Send
+                </button>
+            </div>
+
+        </div>
+
+        <div class="modal-footer">
+            <button class="btn btn-outline"
+                    onclick="closeOperatingReplyModal()">
+                Close
+            </button>
+        </div>
+
+    </div>
+</div>
+<!-- END OPERATING LOG REPLY CHAT MODAL -->
+
+
 <script src="../shared/cmms.js"></script>
 <script>
 let user, allEquipment = [], stopReasons = [], pendingStop = null;
@@ -1208,45 +1269,51 @@ async function viewEquipment(eqId) {
             return;
         }
 
-        document.getElementById('operatingHistoryContent').innerHTML = `
-            <table style="width:100%;border-collapse:collapse;min-width:750px;">
+document.getElementById('operatingHistoryContent').innerHTML = `
+            <table style="width:100%;border-collapse:collapse;min-width:820px;">
                 <thead>
                     <tr style="background:#f1f5f9;text-align:left;">
                         <th style="padding:10px;">#</th>
+                        <th style="padding:10px;">Status</th>
                         <th style="padding:10px;">RPM Speed</th>
                         <th style="padding:10px;">Load Speed</th>
                         <th style="padding:10px;">Shift</th>
                         <th style="padding:10px;">Logged By</th>
                         <th style="padding:10px;">Date & Time</th>
                         <th style="padding:10px;">Remarks</th>
+                        <th style="padding:10px;">Action</th>
                     </tr>
                 </thead>
                 <tbody>
-                    ${logs.map((log, index) => `
+                    ${logs.map((log, index) => {
+                        const isRpmLoadNull = (log.actual_rpm === null || log.actual_rpm === '' || log.actual_rpm === undefined)
+                            && (log.actual_load === null || log.actual_load === '' || log.actual_load === undefined);
+
+                        const isStopped = isRpmLoadNull || String(log.status || '').toUpperCase() === 'STOPPED';
+
+                        const statusBadge = isStopped
+                            ? `<span style="background:#fee2e2;color:#991b1b;padding:3px 8px;border-radius:12px;font-size:12px;font-weight:700;">STOPPED</span>`
+                            : `<span style="background:#dcfce7;color:#166534;padding:3px 8px;border-radius:12px;font-size:12px;font-weight:700;">RUNNING</span>`;
+
+                        return `
                         <tr>
+                            <td style="padding:10px;border-top:1px solid #e2e8f0;">${index + 1}</td>
+                            <td style="padding:10px;border-top:1px solid #e2e8f0;">${statusBadge}</td>
+                            <td style="padding:10px;border-top:1px solid #e2e8f0;">${escapeHistoryHtml(log.actual_rpm ?? '—')}</td>
+                            <td style="padding:10px;border-top:1px solid #e2e8f0;">${escapeHistoryHtml(log.actual_load ?? '—')}</td>
+                            <td style="padding:10px;border-top:1px solid #e2e8f0;">${escapeHistoryHtml(log.shift)}</td>
+                            <td style="padding:10px;border-top:1px solid #e2e8f0;">${escapeHistoryHtml(log.logged_by_name || log.logged_by || '—')}</td>
+                            <td style="padding:10px;border-top:1px solid #e2e8f0;">${escapeHistoryHtml(formatDateTimeIST(log.logged_at))}</td>
+                            <td style="padding:10px;border-top:1px solid #e2e8f0;">${escapeHistoryHtml(log.remarks || '—')}</td>
                             <td style="padding:10px;border-top:1px solid #e2e8f0;">
-                                ${index + 1}
-                            </td>
-                            <td style="padding:10px;border-top:1px solid #e2e8f0;">
-                                ${escapeHistoryHtml(log.actual_rpm)}
-                            </td>
-                            <td style="padding:10px;border-top:1px solid #e2e8f0;">
-                                ${escapeHistoryHtml(log.actual_load)}
-                            </td>
-                            <td style="padding:10px;border-top:1px solid #e2e8f0;">
-                                ${escapeHistoryHtml(log.shift)}
-                            </td>
-                            <td style="padding:10px;border-top:1px solid #e2e8f0;">
-                                ${escapeHistoryHtml(log.logged_by_name || log.logged_by || '—')}
-                            </td>
-                            <td style="padding:10px;border-top:1px solid #e2e8f0;">
-                                ${escapeHistoryHtml(log.logged_at || '—')}
-                            </td>
-                            <td style="padding:10px;border-top:1px solid #e2e8f0;">
-                                ${escapeHistoryHtml(log.remarks || '—')}
-                            </td>
-                        </tr>
-                    `).join('')}
+    ${isStopped && log.shift_log_id ? `
+        <button class="btn btn-primary btn-sm" onclick="openOperatingReplyModal(${Number(log.shift_log_id)})">
+            💬 Reply
+        </button>
+    ` : '—'}
+</td>
+                        </tr>`;
+                    }).join('')}
                 </tbody>
             </table>
         `;
@@ -1265,6 +1332,41 @@ async function viewEquipment(eqId) {
 }
 
 
+
+// Format backend UTC date/time into Indian Standard Time (IST)
+function formatDateTimeIST(value) {
+
+    if (!value) return '—';
+
+    let dateString = String(value).trim();
+
+    // If backend sends SQL datetime without timezone,
+    // treat it as UTC (recommended backend standard).
+    if (
+        !dateString.endsWith('Z') &&
+        !/[+-]\d{2}:?\d{2}$/.test(dateString)
+    ) {
+        dateString = dateString.replace(' ', 'T') + 'Z';
+    }
+
+    const date = new Date(dateString);
+
+    if (Number.isNaN(date.getTime())) {
+        return String(value);
+    }
+
+    return new Intl.DateTimeFormat('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+    }).format(date);
+}
+
 // HTML escape helper
 function escapeHistoryHtml(value) {
     const div = document.createElement('div');
@@ -1278,6 +1380,157 @@ function closeOperatingHistoryModal() {
     document.getElementById('operatingHistoryModal')
         .classList.remove('open');
 }
+
+
+
+
+let activeOperatingReplyLogId = null;
+let replyPollTimer = null;
+
+async function openOperatingReplyModal(shiftLogId) {
+    activeOperatingReplyLogId = Number(shiftLogId);
+
+    document.getElementById('operatingReplyTitle').textContent =
+        `Stop Log Chat #${shiftLogId}`;
+
+    const box = document.getElementById('operatingReplyMessages');
+    box.style.background = '#efeae2'; // WhatsApp chat background
+    box.innerHTML = '<p style="text-align:center;color:#64748b;">Loading messages...</p>';
+
+    document.getElementById('operatingReplyModal').classList.add('open');
+
+    await loadOperatingReplies(true);
+
+    // Auto-refresh every 5 seconds while chat is open
+    if (replyPollTimer) clearInterval(replyPollTimer);
+    replyPollTimer = setInterval(() => loadOperatingReplies(false), 5000);
+}
+
+function closeOperatingReplyModal() {
+    document.getElementById('operatingReplyModal').classList.remove('open');
+    activeOperatingReplyLogId = null;
+    if (replyPollTimer) {
+        clearInterval(replyPollTimer);
+        replyPollTimer = null;
+    }
+}
+
+async function loadOperatingReplies(scrollToBottom = false) {
+    if (!activeOperatingReplyLogId) return;
+
+    try {
+        const response = await api(
+            `/shift-logs/${activeOperatingReplyLogId}/replies`
+        );
+
+        const replies = response.data?.replies || [];
+        const container = document.getElementById('operatingReplyMessages');
+
+        document.getElementById('operatingReplyInfo').textContent =
+            `Shift Log ID: #${activeOperatingReplyLogId} | Messages: ${replies.length}`;
+
+        if (!replies.length) {
+            container.innerHTML =
+                '<p style="text-align:center;color:#64748b;margin-top:20px;">No messages yet. Start the conversation.</p>';
+            return;
+        }
+
+        const wasNearBottom =
+            container.scrollHeight - container.scrollTop - container.clientHeight < 60;
+
+        container.innerHTML = replies.map(reply => {
+            const isMine = Number(reply.user_id) === Number(user.id);
+            const roleLabel = reply.role === 'maintenance'
+                ? 'HOD'
+                : reply.role === 'operator'
+                    ? 'Shift-in-Charge'
+                    : (reply.role || '');
+
+            return `
+                <div style="display:flex;justify-content:${isMine ? 'flex-end' : 'flex-start'};margin-bottom:10px;">
+                    <div style="
+                        max-width:78%;
+                        padding:8px 12px;
+                        background:${isMine ? '#d9fdd3' : '#ffffff'};
+                        color:#111b21;
+                        border-radius:${isMine ? '12px 12px 2px 12px' : '12px 12px 12px 2px'};
+                        box-shadow:0 1px 2px rgba(0,0,0,0.12);
+                    ">
+                        <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
+                            <strong style="font-size:12px;color:${isMine ? '#075e54' : '#1e40af'};">
+                                ${isMine ? 'You' : escapeHistoryHtml(reply.user_name || 'User')}
+                            </strong>
+                            <span style="font-size:10px;background:#e2e8f0;color:#475569;padding:1px 6px;border-radius:10px;">
+                                ${escapeHistoryHtml(roleLabel)}
+                            </span>
+                        </div>
+                        <div style="white-space:pre-wrap;word-break:break-word;font-size:13.5px;line-height:1.4;">
+                            ${escapeHistoryHtml(reply.message || '')}
+                        </div>
+                        <div style="text-align:right;font-size:10.5px;color:#667781;margin-top:4px;">
+                            ${escapeHistoryHtml(formatDateTimeIST(reply.sent_at))}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        if (scrollToBottom || wasNearBottom) {
+            container.scrollTop = container.scrollHeight;
+        }
+
+    } catch (error) {
+        console.error(error);
+        document.getElementById('operatingReplyMessages').innerHTML =
+            `<p style="color:#dc2626;text-align:center;">${escapeHistoryHtml(error.message || 'Unable to load messages')}</p>`;
+    }
+}
+
+async function sendOperatingReply() {
+    if (!activeOperatingReplyLogId) return;
+
+    const input = document.getElementById('operatingReplyInput');
+    const btn = document.getElementById('sendOperatingReplyBtn');
+    const message = input.value.trim();
+
+    if (!message) {
+        showToast('Please enter a message', 'error');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Sending...';
+
+    try {
+        const response = await api(
+            `/shift-logs/${activeOperatingReplyLogId}/replies`,
+            {
+                method: 'POST',
+                body: JSON.stringify({ message })
+            }
+        );
+
+        if (response.success) {
+            input.value = '';
+            await loadOperatingReplies(true);
+        }
+
+    } catch (error) {
+        showToast(error.message || 'Unable to send reply', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Send';
+    }
+}
+
+// Enter key se message send karne ke liye (Shift+Enter se new line)
+document.getElementById('operatingReplyInput')?.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendOperatingReply();
+    }
+});
+
 
 
 </script>

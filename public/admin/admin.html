@@ -1063,6 +1063,18 @@
           rows="3" placeholder="Enter Breakdown reason"></textarea>
       </div>
 
+      <div class="form-group">
+          <label class="form-label">Take Time (Minutes)</label>
+          <input
+              type="number"
+              class="form-control"
+              id="srTakeTime"
+              min="0"
+              step="1"
+              placeholder="e.g. 30, 60, 120"
+          >
+      </div>
+
     </div>
 
     <div class="modal-footer">
@@ -1124,6 +1136,19 @@
           id="srEditRemark"
           rows="4"
           placeholder="Enter Breakdown reason"></textarea>
+      </div>
+
+
+      <div class="form-group">
+          <label class="form-label">Take Time (Minutes)</label>
+          <input
+              type="number"
+              class="form-control"
+              id="srEditTakeTime"
+              min="0"
+              step="1"
+              placeholder="e.g. 30, 60, 120"
+          >
       </div>
 
       <div class="form-group">
@@ -3130,6 +3155,7 @@ async function loadSr() {
                             <th>Description</th>
                             <th>Category</th>
                             <th>Breakdown</th>
+                            <th>Take Time</th>
                             <th>Status</th>
                             <th>Actions</th>
                         </tr>
@@ -3159,6 +3185,8 @@ async function loadSr() {
                     <td>${srEscape(r.category || '—')}</td>
 
                     <td>${srEscape(r.remark || '—')}</td>
+
+                    <td>${r.take_time_minutes != null ? `${Number(r.take_time_minutes)} min` : '—'}</td>
 
                     <td>
                         <span class="badge ${active ? 'badge-running' : 'badge-stopped'}">
@@ -3207,7 +3235,7 @@ function openSrModal() {
     document.getElementById('srDesc').value = '';
     document.getElementById('srCat').selectedIndex = 0;
     document.getElementById('srRemark').value = '';
-
+    document.getElementById('srTakeTime').value = '';
     document.getElementById('srModalTitle').textContent =
         'Add Stop Reason';
 
@@ -3227,7 +3255,10 @@ async function saveSr() {
         code: document.getElementById('srCode').value.trim().toUpperCase(),
         description: document.getElementById('srDesc').value.trim(),
         category: document.getElementById('srCat').value,
-        remark: document.getElementById('srRemark').value.trim()
+        remark: document.getElementById('srRemark').value.trim(),
+        take_time_minutes: document.getElementById('srTakeTime').value === ''
+        ? null
+        : Number(document.getElementById('srTakeTime').value)
     };
 
     if (!body.code || !body.description) {
@@ -3283,6 +3314,7 @@ window.editSr = function(id) {
     document.getElementById('srEditDesc').value = r.description || '';
     document.getElementById('srEditCat').value = r.category || 'Mechanical';
     document.getElementById('srEditRemark').value = r.remark || '';
+    document.getElementById('srEditTakeTime').value = r.take_time_minutes ?? '';
 
     document.getElementById('srEditActive').value =
         srIsActive(r.active) ? '1' : '0';
@@ -3308,6 +3340,10 @@ window.updateSr = async function() {
         description: document.getElementById('srEditDesc').value.trim(),
         category: document.getElementById('srEditCat').value,
         remark: document.getElementById('srEditRemark').value.trim(),
+        take_time_minutes:
+        document.getElementById('srEditTakeTime').value === ''
+            ? null
+            : Number(document.getElementById('srEditTakeTime').value),
         active: document.getElementById('srEditActive').value === '1'
     };
 

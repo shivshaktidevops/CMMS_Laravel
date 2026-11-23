@@ -102,9 +102,33 @@ function fmtDuration(minutes) {
   return rem ? `${h}h ${rem}m` : `${h}h`;
 }
 
-function fmtDateTime(iso) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleString('en-IN', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit', hour12:true });
+function fmtDateTime(value) {
+
+    if (!value) return '—';
+
+    let dateString = String(value).trim();
+
+    // Timezone missing ho to UTC assume karein
+    const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(dateString);
+
+    if (!hasTimezone) {
+        dateString = dateString.replace(' ', 'T') + 'Z';
+    }
+
+    const date = new Date(dateString);
+
+    if (isNaN(date.getTime())) return '—';
+
+    return new Intl.DateTimeFormat('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+    }).format(date);
 }
 
 function fmtDate(iso) {
