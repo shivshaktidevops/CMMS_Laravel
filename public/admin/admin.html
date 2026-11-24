@@ -755,10 +755,12 @@
 
 <!-- RECENT ACTIVITY DETAILS MODAL -->
 <div class="modal-overlay" id="activityDetailsModal">
-    <div class="modal" style="max-width:750px;width:95%">
+    <div class="modal" style="width:95%;max-width:950px;">
 
         <div class="modal-header">
-            <div class="modal-title">📋 Activity Log Details</div>
+            <div class="modal-title" id="activityDetailsModalTitle">
+                📋 Equipment Operating Log History
+            </div>
             <button class="modal-close"
                     onclick="closeModal('activityDetailsModal')">
                 ✕
@@ -766,8 +768,8 @@
         </div>
 
         <div class="modal-body">
-            <div id="activityDetailsContent">
-                Loading details...
+            <div id="activityDetailsContent" style="overflow-x:auto;">
+                <div class="loading">Loading operating logs...</div>
             </div>
         </div>
 
@@ -778,6 +780,32 @@
             </button>
         </div>
 
+    </div>
+</div>
+
+<!-- ADMIN STOP LOG REPLY CHAT MODAL -->
+<div class="modal-overlay" id="adminReplyModal">
+    <div class="modal" style="width:95%;max-width:650px;">
+        <div class="modal-header">
+            <div class="modal-title">💬 Stop Log Communication</div>
+            <button class="modal-close" onclick="closeAdminReplyModal()">✕</button>
+        </div>
+        <div class="modal-body">
+            <div style="padding:12px;background:#eff6ff;border-radius:8px;margin-bottom:15px;">
+                <strong id="adminReplyTitle">Stop Log Chat</strong>
+                <div id="adminReplyInfo" style="font-size:13px;color:#64748b;margin-top:5px;"></div>
+            </div>
+            <div id="adminReplyMessages" style="height:300px;overflow-y:auto;padding:12px;background:#efeae2;border-radius:8px;">
+                Loading messages...
+            </div>
+            <div style="display:flex;gap:10px;margin-top:12px;">
+                <textarea id="adminReplyInput" class="form-control" rows="2" maxlength="2000" placeholder="Write your message..." style="flex:1;"></textarea>
+                <button class="btn btn-primary" id="sendAdminReplyBtn" onclick="sendAdminReply()">Send</button>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeAdminReplyModal()">Close</button>
+        </div>
     </div>
 </div>
 
@@ -1392,20 +1420,16 @@ const dashboardListHTML = dashboardEquipment.length > 0
                     <tr style="background:#f1f5f9;text-align:left">
                         <th style="padding:12px">#</th>
                         <th style="padding:12px">Equipment Name</th>
-                        <th style="padding:12px">Equipment Code</th>
-                        <th style="padding:12px">Asset UID</th>
                         <th style="padding:12px">Machine Tag</th>
                         <th style="padding:12px">Department</th>
-                        <th style="padding:12px">Type</th>
                         <th style="padding:12px">Plant</th>
-                        <th style="padding:12px">Capacity</th>
                         <th style="padding:12px">RPM Speed</th>
                         <th style="padding:12px">Load Speed</th>
-                        <th style="padding:12px">KW Capacity</th>
+                        <th style="padding:12px">Current RPM</th>
+                        <th style="padding:12px">Current Load</th>
                         <th style="padding:12px">Status</th>
                         <th style="padding:12px">Location</th>
-                        <th style="padding:12px">Manufacturer</th>
-                        <th style="padding:12px">Serial Number</th>
+                       
                     </tr>
                 </thead>
 
@@ -1431,14 +1455,6 @@ const dashboardListHTML = dashboardEquipment.length > 0
                                 </td>
 
                                 <td style="padding:12px">
-                                    ${esc(e.code || '-')}
-                                </td>
-
-                                <td style="padding:12px">
-                                    ${esc(e.asset_uid || '-')}
-                                </td>
-
-                                <td style="padding:12px">
                                     ${esc(e.machine_tag || '-')}
                                 </td>
 
@@ -1446,17 +1462,13 @@ const dashboardListHTML = dashboardEquipment.length > 0
                                     ${esc(e.department || '-')}
                                 </td>
 
-                                <td style="padding:12px">
-                                    ${esc(e.type || '-')}
-                                </td>
+                                
 
                                 <td style="padding:12px">
                                     ${esc(e.plant || '-')}
                                 </td>
 
-                                <td style="padding:12px">
-                                    ${esc(e.capacity || '-')}
-                                </td>
+                               
 
                                 <td style="padding:12px">
                                     ${esc(e.rpm_speed ?? '-')}
@@ -1467,9 +1479,14 @@ const dashboardListHTML = dashboardEquipment.length > 0
                                 </td>
 
                                 <td style="padding:12px">
-                                    ${esc(e.kw_capacity ?? '-')}
+                                    ${esc(e.current_rpm ?? e.latest_actual_rpm ?? '-')}
                                 </td>
 
+                                <!-- 4. Current Load -->
+                                <td style="padding:12px">
+                                    ${esc(e.current_load ?? e.latest_actual_load ?? '-')}
+                                </td>
+                               
                                 <td style="padding:12px">
                                     <span style="color:${statusColor};font-weight:700">
                                         ${esc(status)}
@@ -1480,13 +1497,7 @@ const dashboardListHTML = dashboardEquipment.length > 0
                                     ${esc(e.location || '-')}
                                 </td>
 
-                                <td style="padding:12px">
-                                    ${esc(e.manufacturer || '-')}
-                                </td>
-
-                                <td style="padding:12px">
-                                    ${esc(e.serial_number || '-')}
-                                </td>
+                              
 
                             </tr>
                         `;
@@ -1562,6 +1573,10 @@ function escDashboardError(value) {
    DASHBOARD RECENT ACTIVITY
 ======================================== */
 
+/* ========================================
+   DASHBOARD RECENT ACTIVITY
+======================================== */
+
 let dashboardActivityLogs = [];
 
 function escapeActivityText(value) {
@@ -1569,7 +1584,6 @@ function escapeActivityText(value) {
     div.textContent = value ?? '';
     return div.innerHTML;
 }
-
 
 async function loadDashboardActivity() {
 
@@ -1586,7 +1600,7 @@ async function loadDashboardActivity() {
 
     try {
 
-        const response = await api('/admin/audit-log');
+        const response = await api('/admin/audit-log?limit=200');
 
         const allLogs = Array.isArray(response.data)
             ? response.data
@@ -1630,13 +1644,14 @@ async function loadDashboardActivity() {
 
                     <br>
 
+                    ${log.equipment_name ? `
+                        <strong>Equipment:</strong>
+                        ${escapeActivityText(log.equipment_name)}
+                        <br>
+                    ` : ''}
+
                     <strong>Module:</strong>
                     ${escapeActivityText(log.table_name || 'System')}
-
-                    <br>
-
-                    <strong>Record ID:</strong>
-                    ${escapeActivityText(log.record_id || '—')}
                 </div>
 
                 <div class="activity-time">
@@ -1673,10 +1688,10 @@ async function loadDashboardActivity() {
 
 
 /* ========================================
-   OPEN ACTIVITY DETAILS POPUP
+   OPEN EQUIPMENT OPERATING LOG HISTORY TABLE
 ======================================== */
 
-function openActivityDetails(index) {
+async function openActivityDetails(index) {
 
     const log = dashboardActivityLogs[index];
 
@@ -1686,140 +1701,263 @@ function openActivityDetails(index) {
     }
 
     const modal = document.getElementById('activityDetailsModal');
+    const titleEl = document.getElementById('activityDetailsModalTitle');
     const content = document.getElementById('activityDetailsContent');
 
-    if (!modal || !content) {
-        console.error('Activity details modal HTML not found');
+    if (!modal || !content) return;
+
+    modal.classList.add('open');
+
+    // Agar log kisi Equipment se related hai (e.g. CLOSE_BREAKDOWN, LOG_STOPPED, JOB_CLOSED)
+    if (log.equipment_id) {
+        const eqId = Number(log.equipment_id);
+        const eqName = log.equipment_name || 'Equipment';
+        const eqMeta = [log.equipment_code, log.equipment_department].filter(Boolean).join(' · ');
+
+        if (titleEl) {
+            titleEl.textContent = '📋 Equipment Operating Log History';
+        }
+
+        content.innerHTML = `
+            <div style="padding:12px;background:#eff6ff;border-radius:8px;margin-bottom:15px;">
+                <strong style="font-size:15px;color:#0f172a;">${escapeActivityText(eqName)}</strong>
+                ${eqMeta ? `<div style="font-size:13px;color:#64748b;margin-top:4px;">${escapeActivityText(eqMeta)}</div>` : ''}
+                <div style="font-size:13px;color:#1e40af;margin-top:6px;">Loading logs...</div>
+            </div>
+            <div class="loading">Loading operating logs...</div>
+        `;
+
+        try {
+            const response = await api(`/equipment/${eqId}/operating-logs`);
+            const logs = Array.isArray(response.data) ? response.data : [];
+
+            if (!logs.length) {
+                content.innerHTML = `
+                    <div style="padding:12px;background:#eff6ff;border-radius:8px;margin-bottom:15px;">
+                        <strong style="font-size:15px;color:#0f172a;">${escapeActivityText(eqName)}</strong>
+                        ${eqMeta ? `<div style="font-size:13px;color:#64748b;margin-top:4px;">${escapeActivityText(eqMeta)}</div>` : ''}
+                        <div style="font-size:13px;color:#1e40af;margin-top:6px;">Total Logs: 0</div>
+                    </div>
+                    <div class="activity-empty">No operating logs found for this equipment.</div>
+                `;
+                return;
+            }
+
+            content.innerHTML = `
+                <div style="padding:12px;background:#eff6ff;border-radius:8px;margin-bottom:15px;">
+                    <strong style="font-size:15px;color:#0f172a;">${escapeActivityText(eqName)}</strong>
+                    ${eqMeta ? `<div style="font-size:13px;color:#64748b;margin-top:4px;">${escapeActivityText(eqMeta)}</div>` : ''}
+                    <div style="font-size:13px;color:#1e40af;margin-top:6px;">
+                        Total Logs: ${logs.length}
+                    </div>
+                </div>
+
+                <table style="width:100%;border-collapse:collapse;min-width:820px;">
+                    <thead>
+                        <tr style="background:#f1f5f9;text-align:left;font-size:12px;color:#475569;">
+                            <th style="padding:10px;">#</th>
+                            <th style="padding:10px;">STATUS</th>
+                            <th style="padding:10px;">RPM SPEED</th>
+                            <th style="padding:10px;">LOAD SPEED</th>
+                            <th style="padding:10px;">SHIFT</th>
+                            <th style="padding:10px;">LOGGED BY</th>
+                            <th style="padding:10px;">DATE &amp; TIME</th>
+                            <th style="padding:10px;">REMARKS</th>
+                            <th style="padding:10px;">ACTION</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${logs.map((row, idx) => {
+                            const isRpmLoadNull = (row.actual_rpm === null || row.actual_rpm === '' || row.actual_rpm === undefined)
+                                && (row.actual_load === null || row.actual_load === '' || row.actual_load === undefined);
+                            const isStopped = isRpmLoadNull || String(row.status || '').toUpperCase() === 'STOPPED';
+
+                            const statusBadge = isStopped
+                                ? `<span style="background:#fee2e2;color:#991b1b;padding:3px 10px;border-radius:12px;font-size:11.5px;font-weight:700;">STOPPED</span>`
+                                : `<span style="background:#dcfce7;color:#166534;padding:3px 10px;border-radius:12px;font-size:11.5px;font-weight:700;">RUNNING</span>`;
+
+                            return `
+                                <tr>
+                                    <td style="padding:10px;border-top:1px solid #e2e8f0;">${idx + 1}</td>
+                                    <td style="padding:10px;border-top:1px solid #e2e8f0;">${statusBadge}</td>
+                                    <td style="padding:10px;border-top:1px solid #e2e8f0;">${escapeActivityText(row.actual_rpm ?? '—')}</td>
+                                    <td style="padding:10px;border-top:1px solid #e2e8f0;">${escapeActivityText(row.actual_load ?? '—')}</td>
+                                    <td style="padding:10px;border-top:1px solid #e2e8f0;">${escapeActivityText(row.shift || '—')}</td>
+                                    <td style="padding:10px;border-top:1px solid #e2e8f0;">${escapeActivityText(row.logged_by_name || row.logged_by || '—')}</td>
+                                    <td style="padding:10px;border-top:1px solid #e2e8f0;">${escapeActivityText(formatDateTime(row.logged_at))}</td>
+                                    <td style="padding:10px;border-top:1px solid #e2e8f0;">${escapeActivityText(row.remarks || '—')}</td>
+                                    <td style="padding:10px;border-top:1px solid #e2e8f0;">
+                                        ${isStopped && row.shift_log_id ? `
+                                            <button class="btn btn-primary btn-sm" onclick="openAdminReplyModal(${Number(row.shift_log_id)})">
+                                                💬 Reply
+                                            </button>
+                                        ` : '—'}
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+        } catch (error) {
+            content.innerHTML = `
+                <div style="color:#dc2626;padding:12px;">
+                    Unable to load operating logs: ${escapeActivityText(error.message)}
+                </div>
+            `;
+        }
         return;
     }
 
-    // Hide sensitive information
-    const sensitiveKeys = [
-        'password',
-        'current_password',
-        'new_password',
-        'token',
-        'access_token',
-        'refresh_token',
-        'secret',
-        'api_key'
-    ];
-
-    function sanitize(value, key = '') {
-
-        if (sensitiveKeys.includes(key.toLowerCase())) {
-            return '[HIDDEN]';
-        }
-
-        if (Array.isArray(value)) {
-            return value.map(item => sanitize(item));
-        }
-
-        if (value && typeof value === 'object') {
-            const result = {};
-
-            Object.entries(value).forEach(([k, v]) => {
-                result[k] = sanitize(v, k);
-            });
-
-            return result;
-        }
-
-        return value;
+    // Non-Equipment logs (Users / Masters / Stop Reasons) ke liye module-wise table list
+    const moduleName = (log.table_name || 'System').replace(/_/g, ' ').toUpperCase();
+    if (titleEl) {
+        titleEl.textContent = `📋 ${moduleName} — Activity History`;
     }
 
-    const safeLog = sanitize(log);
+    const relatedLogs = dashboardActivityLogs.filter(item => item.table_name === log.table_name);
 
-    let html = `
-        <div style="
-            background:#eff6ff;
-            border-radius:8px;
-            padding:15px;
-            margin-bottom:15px;
-        ">
-            <div style="font-size:12px;color:#64748b">
-                ACTIVITY ACTION
-            </div>
-
-            <div style="
-                font-size:18px;
-                font-weight:700;
-                color:#1d4ed8;
-                margin-top:5px;
-            ">
-                ${escapeActivityText(log.action || 'System Activity')}
-            </div>
+    content.innerHTML = `
+        <div style="padding:12px;background:#eff6ff;border-radius:8px;margin-bottom:15px;">
+            <strong style="font-size:15px;color:#0f172a;">${escapeActivityText(moduleName)}</strong>
+            <div style="font-size:13px;color:#1e40af;margin-top:6px;">Total Logs: ${relatedLogs.length}</div>
         </div>
 
-        <div style="
-            border:1px solid #e2e8f0;
-            border-radius:8px;
-            overflow:hidden;
-        ">
+        <table style="width:100%;border-collapse:collapse;min-width:650px;">
+            <thead>
+                <tr style="background:#f1f5f9;text-align:left;font-size:12px;color:#475569;">
+                    <th style="padding:10px;">#</th>
+                    <th style="padding:10px;">ACTION</th>
+                    <th style="padding:10px;">USER</th>
+                    <th style="padding:10px;">MODULE</th>
+                    <th style="padding:10px;">DATE &amp; TIME</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${relatedLogs.map((row, idx) => `
+                    <tr>
+                        <td style="padding:10px;border-top:1px solid #e2e8f0;">${idx + 1}</td>
+                        <td style="padding:10px;border-top:1px solid #e2e8f0;"><strong>${escapeActivityText(row.action || '—')}</strong></td>
+                        <td style="padding:10px;border-top:1px solid #e2e8f0;">${escapeActivityText(row.full_name || row.username || '—')}</td>
+                        <td style="padding:10px;border-top:1px solid #e2e8f0;">${escapeActivityText(row.table_name || '—')}</td>
+                        <td style="padding:10px;border-top:1px solid #e2e8f0;">${escapeActivityText(formatDateTime(row.logged_at))}</td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
     `;
+}
 
-    Object.entries(safeLog).forEach(([key, value]) => {
 
-        if (value === null || value === undefined || value === '') {
+/* ========================================
+   ADMIN STOP LOG REPLY CHAT
+======================================== */
+
+let activeAdminReplyLogId = null;
+
+async function openAdminReplyModal(shiftLogId) {
+    activeAdminReplyLogId = Number(shiftLogId);
+    document.getElementById('adminReplyTitle').textContent = `Stop Log Chat #${shiftLogId}`;
+    document.getElementById('adminReplyMessages').innerHTML =
+        '<p style="text-align:center;color:#64748b;">Loading messages...</p>';
+    document.getElementById('adminReplyModal').classList.add('open');
+    await loadAdminReplies();
+}
+
+function closeAdminReplyModal() {
+    document.getElementById('adminReplyModal').classList.remove('open');
+    activeAdminReplyLogId = null;
+}
+
+async function loadAdminReplies() {
+    if (!activeAdminReplyLogId) return;
+    try {
+        const response = await api(`/shift-logs/${activeAdminReplyLogId}/replies`);
+        const replies = response.data?.replies || [];
+        const container = document.getElementById('adminReplyMessages');
+
+        document.getElementById('adminReplyInfo').textContent =
+            `Shift Log ID: #${activeAdminReplyLogId} | Messages: ${replies.length}`;
+
+        if (!replies.length) {
+            container.innerHTML =
+                '<p style="text-align:center;color:#64748b;margin-top:20px;">No messages yet.</p>';
             return;
         }
 
-        const isObject = typeof value === 'object';
+        container.innerHTML = replies.map(reply => {
+            const isMine = Number(reply.user_id) === Number(user.id);
+            const roleLabel = reply.role === 'maintenance'
+                ? 'HOD'
+                : reply.role === 'operator'
+                    ? 'Shift-in-Charge'
+                    : (reply.role || '');
 
-        let displayValue = isObject
-            ? JSON.stringify(value, null, 2)
-            : String(value);
-
-        html += `
-            <div style="
-                display:grid;
-                grid-template-columns:180px minmax(0,1fr);
-                gap:12px;
-                padding:12px;
-                border-bottom:1px solid #e2e8f0;
-                align-items:start;
-            ">
-
-                <strong style="
-                    font-size:13px;
-                    color:#475569;
-                    overflow-wrap:anywhere;
-                ">
-                    ${escapeActivityText(
-                        key.replace(/_/g, ' ').toUpperCase()
-                    )}
-                </strong>
-
-                <div style="
-                    font-size:13px;
-                    color:#1e293b;
-                    overflow-wrap:anywhere;
-                    white-space:pre-wrap;
-                ">
-                    ${
-                        isObject
-                            ? `<pre style="
-                                margin:0;
-                                padding:10px;
-                                background:#f8fafc;
-                                border-radius:6px;
-                                white-space:pre-wrap;
-                                overflow-wrap:anywhere;
-                                font-size:12px;
-                            ">${escapeActivityText(displayValue)}</pre>`
-                            : escapeActivityText(displayValue)
-                    }
+            return `
+                <div style="display:flex;justify-content:${isMine ? 'flex-end' : 'flex-start'};margin-bottom:10px;">
+                    <div style="
+                        max-width:78%;
+                        padding:8px 12px;
+                        background:${isMine ? '#d9fdd3' : '#ffffff'};
+                        color:#111b21;
+                        border-radius:${isMine ? '12px 12px 2px 12px' : '12px 12px 12px 2px'};
+                        box-shadow:0 1px 2px rgba(0,0,0,0.12);
+                    ">
+                        <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
+                            <strong style="font-size:12px;color:${isMine ? '#075e54' : '#1e40af'};">
+                                ${isMine ? 'You' : escapeActivityText(reply.user_name || 'User')}
+                            </strong>
+                            <span style="font-size:10px;background:#e2e8f0;color:#475569;padding:1px 6px;border-radius:10px;">
+                                ${escapeActivityText(roleLabel)}
+                            </span>
+                        </div>
+                        <div style="white-space:pre-wrap;word-break:break-word;font-size:13.5px;line-height:1.4;">
+                            ${escapeActivityText(reply.message || '')}
+                        </div>
+                        <div style="text-align:right;font-size:10.5px;color:#667781;margin-top:4px;">
+                            ${escapeActivityText(formatDateTime(reply.sent_at))}
+                        </div>
+                    </div>
                 </div>
+            `;
+        }).join('');
 
-            </div>
-        `;
-    });
+        container.scrollTop = container.scrollHeight;
+    } catch (error) {
+        document.getElementById('adminReplyMessages').innerHTML =
+            `<p style="color:#dc2626;text-align:center;">${escapeActivityText(error.message || 'Unable to load messages')}</p>`;
+    }
+}
 
-    html += '</div>';
+async function sendAdminReply() {
+    if (!activeAdminReplyLogId) return;
+    const input = document.getElementById('adminReplyInput');
+    const btn = document.getElementById('sendAdminReplyBtn');
+    const message = input.value.trim();
 
-    content.innerHTML = html;
+    if (!message) {
+        showToast('Please enter a message', 'error');
+        return;
+    }
 
-    modal.classList.add('open');
+    btn.disabled = true;
+    btn.textContent = 'Sending...';
+
+    try {
+        const response = await api(`/shift-logs/${activeAdminReplyLogId}/replies`, {
+            method: 'POST',
+            body: JSON.stringify({ message })
+        });
+        if (response.success) {
+            input.value = '';
+            await loadAdminReplies();
+        }
+    } catch (error) {
+        showToast(error.message || 'Unable to send reply', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Send';
+    }
 }
 
 

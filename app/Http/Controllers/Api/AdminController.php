@@ -221,9 +221,122 @@ return response()->json(['success' => true, 'data' => $row]);
         }
     }
 
-    public function audit()
+    public function audit_backup()
     {
         return response()->json(['success' => true, 'data' => DB::table('audit_log as al')->leftJoin('users as u', 'al.user_id', '=', 'u.id')->select('al.*', 'u.username', 'u.full_name')->orderByDesc('al.logged_at')->limit(200)->get()]);
+    }
+
+public function audit(Request $r)
+    {
+        try {
+            $limit = min((int) ($r->query('limit', 100)), 10000);
+            if ($limit <= 0) {
+                $limit = 100;
+            }
+
+            $logs = DB::table('audit_log as al')
+                ->leftJoin('users as u', 'al.user_id', '=', 'u.id')
+                ->leftJoin('shift_logs as sl', function ($join) {
+                    $join->on('al.record_id', '=', 'sl.id')
+                         ->where('al.table_name', '=', 'shift_logs');
+                })
+                ->leftJoin('breakdowns as bd', function ($join) {
+                    $join->on('al.record_id', '=', 'bd.id')
+                         ->where('al.table_name', '=', 'breakdowns');
+                })
+                ->leftJoin('jobs as jb', function ($join) {
+                    $join->on('al.record_id', '=', 'jb.id')
+                         ->where('al.table_name', '=', 'jobs');
+                })
+                ->leftJoin('equipment_operating_logs as eol', function ($join) {
+                    $join->on('al.record_id', '=', 'eol.id')
+                         ->where('al.table_name', '=', 'equipment_operating_logs');
+                })
+                ->leftJoin('eq_monitoring_logs as eml', function ($join) {
+                    $join->on('al.record_id', '=', 'eml.id')
+                         ->where('al.table_name', '=', 'eq_monitoring_logs');
+                })
+                ->leftJoin('shift_monitoring_logs as sml', function ($join) {
+                    $join->on('al.record_id', '=', 'sml.id')
+                         ->where('al.table_name', '=', 'shift_monitoring_logs');
+                })
+                ->leftJoin('load_logs as ll', function ($join) {
+                    $join->on('al.record_id', '=', 'll.id')
+                         ->where('al.table_name', '=', 'load_logs');
+                })
+                ->leftJoin('equipment as eq', function ($join) {
+                    $join->on('eq.id', '=', DB::raw("
+                        CASE
+                            WHEN al.table_name = 'equipment' THEN al.record_id
+                            WHEN al.table_name = 'shift_logs' THEN sl.equipment_id
+                            WHEN al.table_name = 'breakdowns' THEN bd.equipment_id
+                            WHEN al.table_name = 'jobs' THEN jb.equipment_id
+                            WHEN al.table_name = 'equipment_operating_logs' THEN eol.equipment_id
+                            WHEN al.table_name = 'eq_monitoring_logs' THEN eml.equipment_id
+                            WHEN al.table_name = 'shift_monitoring_logs' THEN sml.equipment_id
+                            WHEN al.table_name = 'load_logs' THEN ll.equipment_id
+                            ELSE NULL
+                        END
+                    "));
+                })
+                ->select(
+                    'al.id',
+                    'al.user_id',
+                    'al.action',
+                    'al.table_name',
+                    'al.record_id',
+                    'al.details',
+                    'al.ip_address',
+                    'al.logged_at',
+                    'u.username',
+                    'u.full_name',
+                    'eq.id as equipment_id',
+                    'eq.name as equipment_name',
+                    'eq.code as equipment_code',
+                    'eq.department as equipment_department'
+                )
+                ->orderByDesc('al.logged_at')
+                ->orderByDesc('al.id')
+                ->limit($limit)
+                ->get();
+
+            // Fallback: agar details JSON mein equipment_id ho toh wahan se bhi resolve karein
+            $equipMap = DB::table('equipment')
+                ->select('id', 'name', 'code', 'department')
+                ->get()
+                ->keyBy('id');
+
+            $logs = $logs->map(function ($row) use ($equipMap) {
+                $detailsArr = is_string($row->details)
+                    ? json_decode($row->details, true)
+                    : (array) $row->details;
+
+                if (! $row->equipment_id && is_array($detailsArr) && ! empty($detailsArr['equipment_id'])) {
+                    $eq = $equipMap->get((int) $detailsArr['equipment_id']);
+                    if ($eq) {
+                        $row->equipment_id         = $eq->id;
+                        $row->equipment_name       = $eq->name;
+                        $row->equipment_code       = $eq->code;
+                        $row->equipment_department = $eq->department;
+                    }
+                }
+
+                return $row;
+            });
+
+            return response()->json([
+                'success' => true,
+                'data'    => $logs,
+            ]);
+
+        } catch (\Throwable $e) {
+            \Log::error('Audit Log Fetch Error', ['error' => $e->getMessage()]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Unable to load audit logs',
+            ], 500);
+        }
     }
 
     public function getRoleMenuPermissions($role)
@@ -399,7 +512,7 @@ return response()->json(['success' => true, 'data' => $row]);
 
 
     
-    public function dashboardStats()
+    public function dashboardStats_backup()
     {
         try {
 
@@ -817,6 +930,604 @@ return response()->json(['success' => true, 'data' => $row]);
                     'table_counts' => $tableCounts,
 
                     'equipment' => $equipment,
+
+                    'users' => $users,
+
+                    'breakdowns' => $breakdowns,
+
+                    'jobs' => $jobs,
+
+                    'general_shift_jobs' => $generalShiftJobs,
+
+                    'shift_logs' => $shiftLogs,
+
+                    'monitoring' => $monitoring,
+
+                    'load_logs' => $loadLogs,
+
+                    'masters' => $masters,
+
+                    'other' => $other,
+
+                    'plant_wise_equipment' => $plantWiseEquipment,
+
+                    'department_wise_equipment' => $departmentWiseEquipment,
+
+                    'recent_activities' => $recentActivities,
+
+                    'recent_audit_logs' => $recentAuditLogs,
+
+                ],
+            ], 200);
+
+        } catch (\Throwable $e) {
+
+            \Log::error('Admin Dashboard Statistics Error', [
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Unable to load dashboard statistics',
+            ], 500);
+        }
+    }
+
+
+    public function dashboardStats()
+    {
+        try {
+
+            /*
+            |--------------------------------------------------------------------------
+            | 1. ALL DATABASE TABLE COUNTS
+            |--------------------------------------------------------------------------
+            */
+
+            $tables = [
+                'activity_logs',
+                'alert_priorities',
+                'audit_log',
+                'breakdowns',
+                'departments',
+                'equipment',
+                'equipment_components',
+                'equipment_monitoring',
+                'equipment_monitoring_params',
+                'equipment_monitoring_types',
+                'eq_monitoring_logs',
+                'general_shift_jobs',
+                'job_assignments',
+                'job_history',
+                'job_types',
+                'jobs',
+                'load_logs',
+                'locations',
+                'migrations',
+                'monitoring_logs',
+                'permissions',
+                'plants',
+                'roles',
+                'role_menu_permissions',
+                'role_permissions',
+                'shifts',
+                'shift_logs',
+                'shift_monitoring_logs',
+                'stop_reasons',
+                'user_roles',
+                'users',
+            ];
+
+            $tableCounts = [];
+
+            foreach ($tables as $table) {
+                $tableCounts[$table] = DB::table($table)->count();
+            }
+
+            /*
+            |--------------------------------------------------------------------------
+            | 2. EQUIPMENT STATISTICS & STATUS OVERVIEW (WITH CURRENT RPM & LOAD)
+            |--------------------------------------------------------------------------
+            */
+
+            // Latest operating log per equipment_id from equipment_operating_logs
+            $latestOperatingIds = DB::table('equipment_operating_logs')
+                ->select(DB::raw('MAX(id) as id'))
+                ->groupBy('equipment_id');
+
+            $latestOperatingLogs = DB::table('equipment_operating_logs as eol')
+                ->joinSub($latestOperatingIds, 'latest_eol', function ($join) {
+                    $join->on('eol.id', '=', 'latest_eol.id');
+                })
+                ->select(
+                    'eol.equipment_id',
+                    'eol.actual_rpm',
+                    'eol.actual_load',
+                    'eol.shift',
+                    'eol.logged_at'
+                )
+                ->get()
+                ->keyBy('equipment_id');
+
+            // Latest OPEN breakdown stop reason per equipment_id
+            $latestOpenBdIds = DB::table('breakdowns')
+                ->where('status', 'OPEN')
+                ->select(DB::raw('MAX(id) as id'))
+                ->groupBy('equipment_id');
+
+            $openStopReasons = DB::table('breakdowns as b')
+                ->joinSub($latestOpenBdIds, 'latest_bd', function ($join) {
+                    $join->on('b.id', '=', 'latest_bd.id');
+                })
+                ->leftJoin('stop_reasons as sr', 'b.initial_reason_id', '=', 'sr.id')
+                ->select('b.equipment_id', 'sr.description as stop_reason')
+                ->get()
+                ->keyBy('equipment_id');
+
+            // Safely detect standard RPM / Load columns in equipment table
+            $hasRpmSpeed    = \Illuminate\Support\Facades\Schema::hasColumn('equipment', 'rpm_speed');
+            $hasStandardRpm = \Illuminate\Support\Facades\Schema::hasColumn('equipment', 'standard_rpm');
+            $hasLoadSpeed   = \Illuminate\Support\Facades\Schema::hasColumn('equipment', 'load_speed');
+            $hasStandardLoad = \Illuminate\Support\Facades\Schema::hasColumn('equipment', 'standard_load');
+
+            $equipSelect = [
+                'id',
+                'name',
+                'code',
+                'plant',
+                'department',
+                'location',
+                'current_status',
+                'active',
+                $hasRpmSpeed
+                    ? 'rpm_speed as standard_rpm'
+                    : ($hasStandardRpm ? 'standard_rpm' : DB::raw('NULL as standard_rpm')),
+                $hasLoadSpeed
+                    ? 'load_speed as standard_load'
+                    : ($hasStandardLoad ? 'standard_load' : DB::raw('NULL as standard_load')),
+            ];
+
+            $equipmentStatusOverview = DB::table('equipment')
+                ->where('active', 1)
+                ->select($equipSelect)
+                ->orderByRaw("CASE WHEN current_status = 'STOPPED' THEN 0 ELSE 1 END")
+                ->orderBy('name')
+                ->get()
+                ->map(function ($eq) use ($latestOperatingLogs, $openStopReasons) {
+                    $lastLog = $latestOperatingLogs->get($eq->id);
+                    $isStopped = strtoupper((string) $eq->current_status) === 'STOPPED';
+
+                    $stopReason = null;
+                    if ($isStopped) {
+                        $stopReason = $openStopReasons->get($eq->id)?->stop_reason;
+
+                        if (! $stopReason) {
+                            $stopReason = DB::table('shift_logs as sl')
+                                ->leftJoin('stop_reasons as sr', 'sl.stop_reason_id', '=', 'sr.id')
+                                ->where('sl.equipment_id', $eq->id)
+                                ->where('sl.status', 'STOPPED')
+                                ->orderByDesc('sl.id')
+                                ->value('sr.description');
+                        }
+                    }
+
+                    return [
+                        'id'             => $eq->id,
+                        'name'           => $eq->name,
+                        'code'           => $eq->code,
+                        'plant'          => $eq->plant,
+                        'department'     => $eq->department,
+                        'location'       => $eq->location,
+                        'current_status' => $eq->current_status,
+                        'active'         => $eq->active,
+                        'standard_rpm'   => $eq->standard_rpm,
+                        'standard_load'  => $eq->standard_load,
+                        'current_rpm'    => $lastLog ? $lastLog->actual_rpm : null,
+                        'current_load'   => $lastLog ? $lastLog->actual_load : null,
+                        'last_shift'     => $lastLog ? $lastLog->shift : null,
+                        'last_logged_at' => $lastLog ? $lastLog->logged_at : null,
+                        'stop_reason'    => $stopReason,
+                    ];
+                })
+                ->values();
+
+            $equipment = [
+                'total' => DB::table('equipment')->count(),
+
+                'active' => DB::table('equipment')
+                    ->where('active', 1)
+                    ->count(),
+
+                'inactive' => DB::table('equipment')
+                    ->where('active', 0)
+                    ->count(),
+
+                'status_wise' => DB::table('equipment')
+                    ->select('current_status', DB::raw('COUNT(*) as total'))
+                    ->groupBy('current_status')
+                    ->pluck('total', 'current_status'),
+
+                'list' => $equipmentStatusOverview,
+            ];
+
+            /*
+            |--------------------------------------------------------------------------
+            | 3. USER STATISTICS
+            |--------------------------------------------------------------------------
+            */
+
+            $users = [
+                'total' => DB::table('users')->count(),
+
+                'active' => DB::table('users')
+                    ->where('active', 1)
+                    ->count(),
+
+                'inactive' => DB::table('users')
+                    ->where('active', 0)
+                    ->count(),
+
+                'role_wise' => DB::table('users')
+                    ->select('role', DB::raw('COUNT(*) as total'))
+                    ->groupBy('role')
+                    ->pluck('total', 'role'),
+            ];
+
+            /*
+            |--------------------------------------------------------------------------
+            | 4. BREAKDOWN STATISTICS
+            |--------------------------------------------------------------------------
+            */
+
+            $breakdowns = [
+                'total' => DB::table('breakdowns')->count(),
+
+                'status_wise' => DB::table('breakdowns')
+                    ->select('status', DB::raw('COUNT(*) as total'))
+                    ->groupBy('status')
+                    ->pluck('total', 'status'),
+
+                'today' => DB::table('breakdowns')
+                    ->whereDate('start_time', today())
+                    ->count(),
+
+                'open' => DB::table('breakdowns')
+                    ->where('status', 'OPEN')
+                    ->count(),
+
+                'closed' => DB::table('breakdowns')
+                    ->where('status', 'CLOSED')
+                    ->count(),
+
+                'total_downtime_minutes' => DB::table('breakdowns')
+                    ->sum('downtime_minutes'),
+            ];
+
+            /*
+            |--------------------------------------------------------------------------
+            | 5. JOB STATISTICS
+            |--------------------------------------------------------------------------
+            */
+
+            $jobs = [
+                'total' => DB::table('jobs')->count(),
+
+                'today' => DB::table('jobs')
+                    ->whereDate('created_at', today())
+                    ->count(),
+
+                'status_wise' => DB::table('jobs')
+                    ->select('status', DB::raw('COUNT(*) as total'))
+                    ->groupBy('status')
+                    ->pluck('total', 'status'),
+
+                'priority_wise' => DB::table('jobs as j')
+                    ->leftJoin('alert_priorities as p', 'j.priority_id', '=', 'p.id')
+                    ->select(
+                        'p.name as priority',
+                        DB::raw('COUNT(j.id) as total')
+                    )
+                    ->groupBy('p.name')
+                    ->get(),
+
+                'completed' => DB::table('jobs')
+                    ->whereNotNull('completed_at')
+                    ->count(),
+            ];
+
+            /*
+            |--------------------------------------------------------------------------
+            | 6. GENERAL SHIFT JOB STATISTICS
+            |--------------------------------------------------------------------------
+            */
+
+            $generalShiftJobs = [
+                'total' => DB::table('general_shift_jobs')->count(),
+
+                'today' => DB::table('general_shift_jobs')
+                    ->whereDate('created_at', today())
+                    ->count(),
+
+                'status_wise' => DB::table('general_shift_jobs')
+                    ->select('status', DB::raw('COUNT(*) as total'))
+                    ->groupBy('status')
+                    ->pluck('total', 'status'),
+            ];
+
+            /*
+            |--------------------------------------------------------------------------
+            | 7. SHIFT LOG STATISTICS
+            |--------------------------------------------------------------------------
+            */
+
+            $shiftLogs = [
+                'total' => DB::table('shift_logs')->count(),
+
+                'today' => DB::table('shift_logs')
+                    ->whereDate('shift_date', today())
+                    ->count(),
+
+                'status_wise' => DB::table('shift_logs')
+                    ->select('status', DB::raw('COUNT(*) as total'))
+                    ->groupBy('status')
+                    ->pluck('total', 'status'),
+
+                'shift_wise' => DB::table('shift_logs')
+                    ->select('shift', DB::raw('COUNT(*) as total'))
+                    ->groupBy('shift')
+                    ->pluck('total', 'shift'),
+            ];
+
+            /*
+            |--------------------------------------------------------------------------
+            | 8. MONITORING STATISTICS
+            |--------------------------------------------------------------------------
+            */
+
+            $monitoring = [
+                'equipment_monitoring' => DB::table('equipment_monitoring')->count(),
+
+                'monitoring_parameters' => DB::table('equipment_monitoring_params')->count(),
+
+                'monitoring_types' => DB::table('equipment_monitoring_types')->count(),
+
+                'eq_monitoring_logs' => DB::table('eq_monitoring_logs')->count(),
+
+                'monitoring_logs' => DB::table('monitoring_logs')->count(),
+
+                'shift_monitoring_logs' => DB::table('shift_monitoring_logs')->count(),
+
+                'today_eq_logs' => DB::table('eq_monitoring_logs')
+                    ->whereDate('logged_date', today())
+                    ->count(),
+
+                'today_monitoring_logs' => DB::table('monitoring_logs')
+                    ->whereDate('logged_date', today())
+                    ->count(),
+
+                'today_shift_monitoring_logs' => DB::table('shift_monitoring_logs')
+                    ->whereDate('logged_at', today())
+                    ->count(),
+            ];
+
+            /*
+            |--------------------------------------------------------------------------
+            | 9. LOAD LOG STATISTICS
+            |--------------------------------------------------------------------------
+            */
+
+            $loadLogs = [
+                'total' => DB::table('load_logs')->count(),
+
+                'today' => DB::table('load_logs')
+                    ->whereDate('logged_at', today())
+                    ->count(),
+            ];
+
+            /*
+            |--------------------------------------------------------------------------
+            | 10. MASTER DATA STATISTICS
+            |--------------------------------------------------------------------------
+            */
+
+            $masters = [
+                'plants' => DB::table('plants')->count(),
+
+                'active_plants' => DB::table('plants')
+                    ->where('is_active', 1)
+                    ->count(),
+
+                'departments' => DB::table('departments')->count(),
+
+                'active_departments' => DB::table('departments')
+                    ->where('is_active', 1)
+                    ->count(),
+
+                'locations' => DB::table('locations')->count(),
+
+                'active_locations' => DB::table('locations')
+                    ->where('active', 1)
+                    ->count(),
+
+                'shifts' => DB::table('shifts')->count(),
+
+                'active_shifts' => DB::table('shifts')
+                    ->where('is_active', 1)
+                    ->count(),
+
+                'stop_reasons' => DB::table('stop_reasons')->count(),
+
+                'active_stop_reasons' => DB::table('stop_reasons')
+                    ->where('active', 1)
+                    ->count(),
+
+                'job_types' => DB::table('job_types')->count(),
+
+                'active_job_types' => DB::table('job_types')
+                    ->where('active', 1)
+                    ->count(),
+
+                'alert_priorities' => DB::table('alert_priorities')->count(),
+
+                'active_alert_priorities' => DB::table('alert_priorities')
+                    ->where('active', 1)
+                    ->count(),
+            ];
+
+            /*
+            |--------------------------------------------------------------------------
+            | 11. OTHER MODULE STATISTICS
+            |--------------------------------------------------------------------------
+            */
+
+            $other = [
+                'equipment_components' => DB::table('equipment_components')->count(),
+
+                'job_assignments' => DB::table('job_assignments')->count(),
+
+                'job_history' => DB::table('job_history')->count(),
+
+                'permissions' => DB::table('permissions')->count(),
+
+                'roles' => DB::table('roles')->count(),
+
+                'active_roles' => DB::table('roles')
+                    ->where('active', 1)
+                    ->count(),
+
+                'role_permissions' => DB::table('role_permissions')->count(),
+
+                'role_menu_permissions' => DB::table('role_menu_permissions')->count(),
+
+                'user_roles' => DB::table('user_roles')->count(),
+            ];
+
+            /*
+            |--------------------------------------------------------------------------
+            | 12. PLANT WISE EQUIPMENT
+            |--------------------------------------------------------------------------
+            */
+
+            $plantWiseEquipment = DB::table('equipment')
+                ->select(
+                    'plant',
+                    DB::raw('COUNT(*) as total_equipment')
+                )
+                ->groupBy('plant')
+                ->orderBy('plant')
+                ->get();
+
+            /*
+            |--------------------------------------------------------------------------
+            | 13. DEPARTMENT WISE EQUIPMENT
+            |--------------------------------------------------------------------------
+            */
+
+            $departmentWiseEquipment = DB::table('equipment')
+                ->select(
+                    'department',
+                    DB::raw('COUNT(*) as total_equipment')
+                )
+                ->groupBy('department')
+                ->orderBy('department')
+                ->get();
+
+            /*
+            |--------------------------------------------------------------------------
+            | 14. RECENT ACTIVITY LOGS
+            |--------------------------------------------------------------------------
+            */
+
+            $recentActivities = DB::table('activity_logs as al')
+                ->leftJoin('users as u', 'al.user_id', '=', 'u.id')
+                ->select(
+                    'al.id',
+                    'al.module',
+                    'al.action',
+                    'al.event_type',
+                    'al.severity',
+                    'al.description',
+                    'al.plant',
+                    'al.department',
+                    'al.created_at',
+                    'u.username',
+                    'u.full_name'
+                )
+                ->orderByDesc('al.created_at')
+                ->limit(10)
+                ->get();
+
+            /*
+            |--------------------------------------------------------------------------
+            | 15. RECENT AUDIT LOGS (WITH EQUIPMENT NAME)
+            |--------------------------------------------------------------------------
+            */
+
+            $recentAuditLogs = DB::table('audit_log as al')
+                ->leftJoin('users as u', 'al.user_id', '=', 'u.id')
+                ->leftJoin('shift_logs as sl', function ($join) {
+                    $join->on('al.record_id', '=', 'sl.id')
+                         ->where('al.table_name', '=', 'shift_logs');
+                })
+                ->leftJoin('breakdowns as bd', function ($join) {
+                    $join->on('al.record_id', '=', 'bd.id')
+                         ->where('al.table_name', '=', 'breakdowns');
+                })
+                ->leftJoin('jobs as jb', function ($join) {
+                    $join->on('al.record_id', '=', 'jb.id')
+                         ->where('al.table_name', '=', 'jobs');
+                })
+                ->leftJoin('equipment_operating_logs as eol', function ($join) {
+                    $join->on('al.record_id', '=', 'eol.id')
+                         ->where('al.table_name', '=', 'equipment_operating_logs');
+                })
+                ->leftJoin('equipment as eq', function ($join) {
+                    $join->on('eq.id', '=', DB::raw("
+                        CASE
+                            WHEN al.table_name = 'equipment' THEN al.record_id
+                            WHEN al.table_name = 'shift_logs' THEN sl.equipment_id
+                            WHEN al.table_name = 'breakdowns' THEN bd.equipment_id
+                            WHEN al.table_name = 'jobs' THEN jb.equipment_id
+                            WHEN al.table_name = 'equipment_operating_logs' THEN eol.equipment_id
+                            ELSE NULL
+                        END
+                    "));
+                })
+                ->select(
+                    'al.id',
+                    'al.action',
+                    'al.table_name',
+                    'al.record_id',
+                    'al.ip_address',
+                    'al.logged_at',
+                    'u.username',
+                    'u.full_name',
+                    'eq.name as equipment_name'
+                )
+                ->orderByDesc('al.logged_at')
+                ->limit(10)
+                ->get();
+
+            /*
+            |--------------------------------------------------------------------------
+            | 16. RESPONSE
+            |--------------------------------------------------------------------------
+            */
+
+            return response()->json([
+                'success' => true,
+
+                'message' => 'Dashboard statistics loaded successfully',
+
+                'data' => [
+
+                    'table_counts' => $tableCounts,
+
+                    'equipment' => $equipment,
+
+                    'equipment_status_overview' => $equipmentStatusOverview,
 
                     'users' => $users,
 
