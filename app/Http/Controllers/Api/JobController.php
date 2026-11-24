@@ -11,9 +11,31 @@ class JobController extends Controller
 {
     private function nextNumber(string $plant): string
     {
-        $n = DB::table('jobs')->where('plant', $plant)->count() + 1;
+        $cleanPlant = strtoupper(preg_replace('/\s+/', '', $plant));
+        $prefix = $cleanPlant . '-JOB-';
 
-        return strtoupper(preg_replace('/\s+/', '', $plant)).'-JOB-'.str_pad((string) $n, 4, '0', STR_PAD_LEFT);
+        $numbers = DB::table('jobs')
+            ->where(function ($q) use ($plant, $cleanPlant) {
+                $q->where('plant', $plant)
+                  ->orWhere('plant', $cleanPlant);
+            })
+            ->where('job_number', 'like', $prefix . '%')
+            ->pluck('job_number');
+
+        $maxSeq = 0;
+        foreach ($numbers as $jobNumber) {
+            if (preg_match('/-(\d+)$/', (string) $jobNumber, $matches)) {
+                $seq = (int) $matches[1];
+                if ($seq > $maxSeq) {
+                    $maxSeq = $seq;
+                }
+            }
+        }
+
+        $nextSeq = $maxSeq + 1;
+        $padLength = max(4, strlen((string) $nextSeq));
+
+        return $prefix . str_pad((string) $nextSeq, $padLength, '0', STR_PAD_LEFT);
     }
 
     private function row(int $id)

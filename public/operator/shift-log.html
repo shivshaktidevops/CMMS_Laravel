@@ -524,11 +524,97 @@ async function loadEquipment() {
     const plant = user.selectedPlant || user.plant || '';
     const qs    = plant ? `?plant=${encodeURIComponent(plant)}` : '';
     const data  = await api(`/equipment${qs}`);
-    allEquipment = data.data;
+    allEquipment = Array.isArray(data.data) ? data.data : [];
     renderEquipment();
+    await hydrateStoppedReasons();
   } catch(e) {
     document.getElementById('eqContainer').innerHTML =
       '<div class="empty-state"><div class="icon">❌</div><p>Failed to load equipment. Check connection.</p></div>';
+  }
+}
+
+async function hydrateStoppedReasons() {
+  const stoppedEqs = allEquipment.filter(
+    eq => String(eq.current_status || '').trim().toUpperCase() === 'STOPPED'
+  );
+  if (!stoppedEqs.length) return;
+
+  let openBreakdownMap = new Map();
+  try {
+    const plant = user.selectedPlant || user.plant || '';
+    const qs = plant ? `?plant=${encodeURIComponent(plant)}` : '';
+    const bdRes = await api(`/breakdowns/open${qs}`);
+    const bds = Array.isArray(bdRes.data) ? bdRes.data : [];
+
+    bds.forEach(bd => {
+      if (bd.equipment_id) {
+        openBreakdownMap.set(Number(bd.equipment_id), bd);
+      }
+      if (bd.bd_number) {
+        openBreakdownMap.set(`BD:${String(bd.bd_number).trim()}`, bd);
+      }
+    });
+  } catch (e) {
+    console.warn('Open breakdowns fetch warning:', e.message);
+  }
+
+  for (const eq of stoppedEqs) {
+    const reasonEl = document.getElementById(`stopReasonText-${eq.id}`);
+    const remarkEl = document.getElementById(`stopRemarkText-${eq.id}`);
+
+    try {
+      const bd =
+        (eq.open_bd_number ? openBreakdownMap.get(`BD:${String(eq.open_bd_number).trim()}`) : null) ||
+        openBreakdownMap.get(Number(eq.id)) ||
+        null;
+
+      const res = await api(`/equipment/${eq.id}/operating-logs`);
+      const logs = Array.isArray(res.data) ? res.data : [];
+      const latestLog = logs[0] || null;
+
+      let reasonText =
+        bd?.initial_reason ||
+        bd?.stop_reason ||
+        bd?.reason_description ||
+        eq.stop_reason ||
+        eq.latest_stop_reason ||
+        '';
+
+      let remarkText =
+        bd?.remarks ||
+        latestLog?.remarks ||
+        eq.latest_remarks ||
+        '';
+
+      const reasonId = bd?.initial_reason_id || bd?.stop_reason_id || latestLog?.stop_reason_id || null;
+      if (!reasonText && reasonId && Array.isArray(stopReasons)) {
+        const found = stopReasons.find(r => Number(r.id) === Number(reasonId));
+        if (found) {
+          reasonText = found.description || found.remark || found.code || '';
+        }
+      }
+
+      if (reasonEl) {
+        reasonEl.textContent = reasonText || 'Not specified';
+      }
+
+      if (remarkEl) {
+        if (remarkText) {
+          remarkEl.textContent = `📝 ${remarkText}`;
+          remarkEl.style.display = 'block';
+        } else {
+          remarkEl.textContent = '';
+          remarkEl.style.display = 'none';
+        }
+      }
+    } catch (e) {
+      if (reasonEl) {
+        reasonEl.textContent = eq.stop_reason || 'Not specified';
+      }
+      if (remarkEl) {
+        remarkEl.style.display = 'none';
+      }
+    }
   }
 }
 
@@ -656,7 +742,15 @@ function renderEquipment() {
             </div>
             <span class="badge badge-${running ? 'running' : 'stopped'}">${eq.current_status}</span>
           </div>
-          ${!running ? `<div class="downtime-timer">⏱ Down: ${fmtDuration(downMins)} ${eq.open_bd_number ? '· ' + eq.open_bd_number : ''}</div>` : ''}
+          ${!running ? `
+  <div class="downtime-timer">⏱ Down: ${fmtDuration(downMins)} ${eq.open_bd_number ? '· ' + eq.open_bd_number : ''}</div>
+  <div style="margin:.35rem 0;padding:.4rem .6rem;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;font-size:.75rem;color:#991b1b;font-weight:600">
+    🛑 Reason: <span id="stopReasonText-${eq.id}">${escapeHistoryHtml(eq.stop_reason || eq.latest_stop_reason || 'Loading reason...')}</span>
+    <div id="stopRemarkText-${eq.id}" style="font-weight:400;color:#7f1d1d;margin-top:2px;${eq.latest_remarks ? '' : 'display:none'}">
+      ${eq.latest_remarks ? '📝 ' + escapeHistoryHtml(eq.latest_remarks) : ''}
+    </div>
+  </div>
+` : ''}
           ${running && eq.active_job_number ? `<div style="margin:.4rem 0;padding:.4rem .6rem;background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;font-size:.75rem;color:#92400e;font-weight:600">⚠️ Active Job: ${eq.active_job_number} (${eq.active_job_status}) — Close job before marking RUNNING again</div>` : ''}
 <div class="eq-actions" style="margin-top:.75rem">
 
@@ -757,7 +851,15 @@ function renderEquipment() {
             </div>
             <span class="badge badge-${running ? 'running' : 'stopped'}">${eq.current_status}</span>
           </div>
-          ${!running ? `<div class="downtime-timer">⏱ Down: ${fmtDuration(downMins)} ${eq.open_bd_number ? '· ' + eq.open_bd_number : ''}</div>` : ''}
+          ${!running ? `
+  <div class="downtime-timer">⏱ Down: ${fmtDuration(downMins)} ${eq.open_bd_number ? '· ' + eq.open_bd_number : ''}</div>
+  <div style="margin:.35rem 0;padding:.4rem .6rem;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;font-size:.75rem;color:#991b1b;font-weight:600">
+    🛑 Reason: <span id="stopReasonText-${eq.id}">${escapeHistoryHtml(eq.stop_reason || eq.latest_stop_reason || 'Loading reason...')}</span>
+    <div id="stopRemarkText-${eq.id}" style="font-weight:400;color:#7f1d1d;margin-top:2px;${eq.latest_remarks ? '' : 'display:none'}">
+      ${eq.latest_remarks ? '📝 ' + escapeHistoryHtml(eq.latest_remarks) : ''}
+    </div>
+  </div>
+` : ''}
           ${running && eq.active_job_number ? `<div style="margin:.4rem 0;padding:.4rem .6rem;background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;font-size:.75rem;color:#92400e;font-weight:600">⚠️ Active Job: ${eq.active_job_number} (${eq.active_job_status}) — Close job before marking RUNNING again</div>` : ''}
           
 <div class="eq-actions" style="margin-top:.75rem">

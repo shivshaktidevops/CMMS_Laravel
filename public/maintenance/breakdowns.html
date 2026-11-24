@@ -745,8 +745,22 @@ function fmtDuration(mins) {
 
 function fmtDateTime(ts) {
   if (!ts) return '—';
-  return new Date(ts).toLocaleString('en-GB', {
-    day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'
+
+  let dateString = String(ts).trim();
+  if (!dateString.endsWith('Z') && !/[+-]\d{2}:?\d{2}$/.test(dateString)) {
+    dateString = dateString.replace(' ', 'T') + 'Z';
+  }
+
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return String(ts);
+
+  return date.toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
   });
 }
 
@@ -1388,9 +1402,9 @@ function renderEquipmentActivity() {
             : '';
 
         const lastLog = eq.latest_logged_at
-            ? fmtDate(eq.latest_logged_at)
+            ? formatDateTimeIST(eq.latest_logged_at)
             : 'No logs';
-
+            
         const lastShift = eq.latest_shift
             ? ` · Shift ${escapeHtml(eq.latest_shift)}`
             : '';
