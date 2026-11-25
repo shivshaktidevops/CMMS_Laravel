@@ -746,8 +746,8 @@ function renderEquipment() {
   <div class="downtime-timer">⏱ Down: ${fmtDuration(downMins)} ${eq.open_bd_number ? '· ' + eq.open_bd_number : ''}</div>
   <div style="margin:.35rem 0;padding:.4rem .6rem;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;font-size:.75rem;color:#991b1b;font-weight:600">
     🛑 Reason: <span id="stopReasonText-${eq.id}">${escapeHistoryHtml(eq.stop_reason || eq.latest_stop_reason || 'Loading reason...')}</span>
-    <div id="stopRemarkText-${eq.id}" style="font-weight:400;color:#7f1d1d;margin-top:2px;${eq.latest_remarks ? '' : 'display:none'}">
-      ${eq.latest_remarks ? '📝 ' + escapeHistoryHtml(eq.latest_remarks) : ''}
+    <div id="stopRemarkText-${eq.id}" style="font-weight:400;color:#7f1d1d;margin-top:2px;${(eq.stop_remarks || eq.latest_remarks) ? '' : 'display:none'}">
+      ${(eq.stop_remarks || eq.latest_remarks) ? '📝 ' + escapeHistoryHtml(eq.stop_remarks || eq.latest_remarks) : ''}
     </div>
   </div>
 ` : ''}
@@ -1326,38 +1326,23 @@ async function viewEquipment(eqId) {
         return;
     }
 
-    // Close dropdown
     document.querySelectorAll('.eq-dropdown').forEach(menu => {
         menu.classList.remove('show');
     });
 
-    // Equipment details
-    document.getElementById('historyEqName').textContent =
-        eq.name || '';
-
+    document.getElementById('historyEqName').textContent = eq.name || '';
     document.getElementById('historyEqCode').textContent =
         `${eq.code || ''} · ${eq.department || ''}`;
-
-    document.getElementById('historyLogCount').textContent =
-        'Loading logs...';
-
+    document.getElementById('historyLogCount').textContent = 'Loading logs...';
     document.getElementById('operatingHistoryContent').innerHTML = `
         <div class="loading">Loading operating logs...</div>
     `;
 
-    // Open popup
-    document.getElementById('operatingHistoryModal')
-        .classList.add('open');
+    document.getElementById('operatingHistoryModal').classList.add('open');
 
     try {
-
-        const response = await api(
-            `/equipment/${eqId}/operating-logs`
-        );
-
-        const logs = Array.isArray(response.data)
-            ? response.data
-            : [];
+        const response = await api(`/equipment/${eqId}/operating-logs`);
+        const logs = Array.isArray(response.data) ? response.data : [];
 
         document.getElementById('historyLogCount').textContent =
             `Total Logs: ${logs.length}`;
@@ -1371,7 +1356,7 @@ async function viewEquipment(eqId) {
             return;
         }
 
-document.getElementById('operatingHistoryContent').innerHTML = `
+        document.getElementById('operatingHistoryContent').innerHTML = `
             <table style="width:100%;border-collapse:collapse;min-width:820px;">
                 <thead>
                     <tr style="background:#f1f5f9;text-align:left;">
@@ -1408,22 +1393,19 @@ document.getElementById('operatingHistoryContent').innerHTML = `
                             <td style="padding:10px;border-top:1px solid #e2e8f0;">${escapeHistoryHtml(formatDateTimeIST(log.logged_at))}</td>
                             <td style="padding:10px;border-top:1px solid #e2e8f0;">${escapeHistoryHtml(log.remarks || '—')}</td>
                             <td style="padding:10px;border-top:1px solid #e2e8f0;">
-    ${isStopped && log.shift_log_id ? `
-        <button class="btn btn-primary btn-sm" onclick="openOperatingReplyModal(${Number(log.shift_log_id)})">
-            💬 Reply
-        </button>
-    ` : '—'}
-</td>
+                                ${isStopped && log.shift_log_id ? `
+                                    <button class="btn btn-primary btn-sm" onclick="openOperatingReplyModal(${Number(log.shift_log_id)})">
+                                        💬 Reply
+                                    </button>
+                                ` : '—'}
+                            </td>
                         </tr>`;
                     }).join('')}
                 </tbody>
             </table>
         `;
-
     } catch (error) {
-
         console.error('Operating History Error:', error);
-
         document.getElementById('operatingHistoryContent').innerHTML = `
             <div style="color:#dc2626;padding:12px;">
                 Unable to load operating logs:
@@ -1432,7 +1414,6 @@ document.getElementById('operatingHistoryContent').innerHTML = `
         `;
     }
 }
-
 
 
 // Format backend UTC date/time into Indian Standard Time (IST)

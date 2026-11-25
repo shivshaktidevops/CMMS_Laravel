@@ -134,26 +134,25 @@ class EquipmentOperatingLogController extends Controller
     
 
 
-    public function history($equipment)
+public function history($equipment)
     {
         try {
-
-            // Check equipment exists
             $equipmentExists = DB::table('equipment')
                 ->where('id', $equipment)
                 ->exists();
 
-            if (!$equipmentExists) {
+            if (! $equipmentExists) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Equipment not found.',
                 ], 404);
             }
 
-            // Fetch all logs of selected equipment with shift_log_id and status
-            $logs = DB::table('equipment_operating_logs as logs')
+            // 1. Operating logs (RUNNING / logged RPM & Load)
+            $opLogs = DB::table('equipment_operating_logs as logs')
                 ->leftJoin('users as users', 'users.id', '=', 'logs.logged_by')
                 ->leftJoin('shift_logs as sl', 'sl.id', '=', 'logs.shift_log_id')
+                ->leftJoin('stop_reasons as sr', 'sl.stop_reason_id', '=', 'sr.id')
                 ->where('logs.equipment_id', $equipment)
                 ->select([
                     'logs.id',
@@ -168,20 +167,72 @@ class EquipmentOperatingLogController extends Controller
                     'logs.logged_by',
                     'logs.logged_at',
                     'users.full_name as logged_by_name',
+                    'sr.description as stop_reason',
                     DB::raw("CASE WHEN sl.status IS NOT NULL THEN sl.status WHEN logs.actual_rpm IS NULL AND logs.actual_load IS NULL THEN 'STOPPED' ELSE 'RUNNING' END as status"),
                 ])
-                ->orderByDesc('logs.logged_at')
-                ->orderByDesc('logs.id')
                 ->get();
+
+            $linkedShiftIds = $opLogs->pluck('shift_log_id')->filter()->map(fn ($v) => (int) $v)->all();
+
+            // 2. STOPPED shift_logs for this equipment (so every STOPPED log shows with reason, remarks & shift_log_id for Reply chat)
+            $stopQuery = DB::table('shift_logs as sl')
+                ->leftJoin('users as u', 'u.id', '=', 'sl.operator_id')
+                ->leftJoin('stop_reasons as sr', 'sr.id', '=', 'sl.stop_reason_id')
+                ->where('sl.equipment_id', $equipment)
+                ->where('sl.status', 'STOPPED');
+
+            if (! empty($linkedShiftIds)) {
+                $stopQuery->whereNotIn('sl.id', $linkedShiftIds);
+            }
+
+            $stopLogs = $stopQuery
+                ->select([
+                    DB::raw('NULL as id'),
+                    'sl.equipment_id',
+                    DB::raw('sl.id as shift_log_id'),
+                    DB::raw('NULL as standard_rpm'),
+                    DB::raw('NULL as actual_rpm'),
+                    DB::raw('NULL as standard_load'),
+                    DB::raw('NULL as actual_load'),
+                    'sl.shift',
+                    'sl.remarks',
+                    DB::raw('sl.operator_id as logged_by'),
+                    'sl.logged_at',
+                    'u.full_name as logged_by_name',
+                    'sr.description as stop_reason',
+                    DB::raw("'STOPPED' as status"),
+                ])
+                ->get();
+
+            $merged = $opLogs->concat($stopLogs)->map(function ($row) {
+                $reason = trim((string) ($row->stop_reason ?? ''));
+                $remark = trim((string) ($row->remarks ?? ''));
+
+                if (strtoupper((string) $row->status) === 'STOPPED') {
+                    $parts = [];
+                    if ($reason !== '') {
+                        $parts[] = 'Reason: ' . $reason;
+                    }
+                    if ($remark !== '') {
+                        $parts[] = 'Remark: ' . $remark;
+                    }
+                    $row->remarks = $parts ? implode(' | ', $parts) : '—';
+                } else {
+                    $row->remarks = $remark !== '' ? $remark : '—';
+                }
+
+                return $row;
+            })->sortByDesc(function ($row) {
+                $ts = strtotime((string) ($row->logged_at ?? ''));
+                return $ts !== false ? $ts : 0;
+            })->values();
 
             return response()->json([
                 'success' => true,
                 'message' => 'Operating log history fetched successfully.',
-                'data' => $logs,
+                'data' => $merged,
             ]);
-
         } catch (\Throwable $e) {
-
             report($e);
 
             return response()->json([

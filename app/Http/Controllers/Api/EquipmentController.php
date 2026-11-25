@@ -122,7 +122,7 @@ class EquipmentController extends Controller
 
 
     
-    public function index(Request $request)
+    public function index_latest_backup(Request $request)
     {
         // Get latest operating log ID for each equipment
         $latestLogs = DB::table('equipment_operating_logs')
@@ -189,6 +189,161 @@ class EquipmentController extends Controller
                     ]
                 );
             });
+
+        return response()->json([
+            'success' => true,
+            'data' => $rows
+        ]);
+    }
+
+
+    public function index(Request $request)
+    {
+        // Get latest operating log ID for each equipment
+        $latestLogs = DB::table('equipment_operating_logs')
+            ->select(
+                'equipment_id',
+                DB::raw('MAX(id) as latest_id')
+            )
+            ->groupBy('equipment_id');
+
+        // Main equipment query
+        $query = DB::table('equipment as e')
+            ->leftJoinSub(
+                $latestLogs,
+                'latest_logs',
+                function ($join) {
+                    $join->on('e.id', '=', 'latest_logs.equipment_id');
+                }
+            )
+            ->leftJoin(
+                'equipment_operating_logs as operating_log',
+                'operating_log.id',
+                '=',
+                'latest_logs.latest_id'
+            )
+            ->select(
+                'e.*',
+                'operating_log.actual_rpm as latest_actual_rpm',
+                'operating_log.actual_load as latest_actual_load',
+                'operating_log.logged_at as latest_logged_at',
+                'operating_log.shift as latest_shift'
+            )
+            ->where('e.active', 1);
+
+        // Existing Plant Filter
+        if ($request->filled('plant')) {
+            $query->where('e.plant', $request->plant);
+        }
+
+        // Existing Department Filter
+        if ($request->filled('department')) {
+            $query->where('e.department', $request->department);
+        }
+
+        $equipmentList = $query
+            ->orderBy('e.department')
+            ->orderBy('e.name')
+            ->get();
+
+        $equipmentIds = $equipmentList->pluck('id')->filter()->values();
+
+        // Latest STOPPED shift_log per equipment_id (with stop_reasons description/code)
+        $latestStoppedLogsMap = collect();
+        if ($equipmentIds->isNotEmpty()) {
+            $latestStoppedIds = DB::table('shift_logs')
+                ->whereIn('equipment_id', $equipmentIds)
+                ->where('status', 'STOPPED')
+                ->select('equipment_id', DB::raw('MAX(id) as max_id'))
+                ->groupBy('equipment_id');
+
+            $latestStoppedLogsMap = DB::table('shift_logs as sl')
+                ->joinSub($latestStoppedIds, 'latest_sl', function ($join) {
+                    $join->on('sl.id', '=', 'latest_sl.max_id');
+                })
+                ->leftJoin('stop_reasons as sr', 'sl.stop_reason_id', '=', 'sr.id')
+                ->select(
+                    'sl.equipment_id',
+                    'sl.stop_reason_id',
+                    'sl.remarks as stop_remarks',
+                    'sr.description as stop_reason_desc',
+                    'sr.code as stop_reason_code'
+                )
+                ->get()
+                ->keyBy('equipment_id');
+        }
+
+        // Latest OPEN breakdown per equipment_id (fallback if stop_reason is on breakdown)
+        $latestOpenBreakdownsMap = collect();
+        if ($equipmentIds->isNotEmpty()) {
+            $latestOpenBdIds = DB::table('breakdowns')
+                ->whereIn('equipment_id', $equipmentIds)
+                ->where('status', 'OPEN')
+                ->select('equipment_id', DB::raw('MAX(id) as max_id'))
+                ->groupBy('equipment_id');
+
+            $latestOpenBreakdownsMap = DB::table('breakdowns as b')
+                ->joinSub($latestOpenBdIds, 'latest_bd', function ($join) {
+                    $join->on('b.id', '=', 'latest_bd.max_id');
+                })
+                ->leftJoin('stop_reasons as sr', 'b.initial_reason_id', '=', 'sr.id')
+                ->select(
+                    'b.equipment_id',
+                    'b.initial_reason_id',
+                    'sr.description as bd_reason_desc',
+                    'sr.code as bd_reason_code'
+                )
+                ->get()
+                ->keyBy('equipment_id');
+        }
+
+        // Get equipment and enrich existing data
+        $rows = $equipmentList->map(function ($equipment) use (
+            $request,
+            $latestStoppedLogsMap,
+            $latestOpenBreakdownsMap
+        ) {
+            $enriched = $this->enrich(
+                $equipment,
+                $request->shift ?: 'A'
+            );
+
+            $enrichedArr = (array) $enriched;
+            $stopLog = $latestStoppedLogsMap->get($equipment->id);
+            $openBd  = $latestOpenBreakdownsMap->get($equipment->id);
+
+            $stopReason = ($stopLog->stop_reason_desc ?? null)
+                ?: ($stopLog->stop_reason_code ?? null)
+                ?: ($openBd->bd_reason_desc ?? null)
+                ?: ($openBd->bd_reason_code ?? null)
+                ?: ($enrichedArr['stop_reason'] ?? null)
+                ?: null;
+
+            $stopRemarks = ($stopLog->stop_remarks ?? null)
+                ?: ($enrichedArr['stop_remarks'] ?? null)
+                ?: ($enrichedArr['latest_remarks'] ?? null)
+                ?: null;
+
+            $stopReasonId = ($stopLog->stop_reason_id ?? null)
+                ?: ($openBd->initial_reason_id ?? null)
+                ?: ($enrichedArr['stop_reason_id'] ?? null)
+                ?: null;
+
+            // Preserve existing enriched data and append latest log + stop reason/remarks data
+            return (object) array_merge(
+                $enrichedArr,
+                [
+                    'latest_actual_rpm'  => $equipment->latest_actual_rpm,
+                    'latest_actual_load' => $equipment->latest_actual_load,
+                    'latest_logged_at'   => $equipment->latest_logged_at,
+                    'latest_shift'       => $equipment->latest_shift,
+                    'stop_reason_id'     => $stopReasonId,
+                    'stop_reason'        => $stopReason,
+                    'stop_remarks'       => $stopRemarks,
+                    'latest_remarks'     => $stopRemarks,
+                ]
+            );
+        });
 
         return response()->json([
             'success' => true,

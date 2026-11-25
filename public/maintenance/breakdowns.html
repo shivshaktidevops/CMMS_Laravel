@@ -1502,6 +1502,23 @@ function renderEquipmentActivity() {
                                 ⏱ Down: ${fmtDuration(downMins)}
                                 ${bdNumber ? ` · ${bdNumber}` : ''}
                             </div>
+                            <div style="
+                                margin-top:.35rem;
+                                padding:.35rem .55rem;
+                                background:#fef2f2;
+                                border:1px solid #fecaca;
+                                border-radius:6px;
+                                font-size:.74rem;
+                                color:#991b1b;
+                                font-weight:600;
+                            ">
+                                🛑 Reason: ${escapeHtml(eq.stop_reason || eq.latest_stop_reason || 'Not specified')}
+                                ${(eq.stop_remarks || eq.latest_remarks || eq.remarks) ? `
+                                    <div style="font-weight:400;color:#7f1d1d;margin-top:2px;">
+                                        📝 ${escapeHtml(eq.stop_remarks || eq.latest_remarks || eq.remarks)}
+                                    </div>
+                                ` : ''}
+                            </div>
                         ` : ''}
 
                         <div style="margin-top:.25rem;color:#64748b;">
