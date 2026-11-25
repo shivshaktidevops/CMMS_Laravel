@@ -1,7 +1,7 @@
 # Laravel Environment
 /.env
 /.env.*
-!/ .env.example
+!/.env.example
 
 # Dependencies
 /vendor
