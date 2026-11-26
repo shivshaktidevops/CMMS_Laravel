@@ -15,42 +15,73 @@ jobs:
 
     steps:
       - name: Install SSH key and verify host
-        uses: appleboy/ssh-action@v1.2.2
         shell: bash
+
         env:
           SSH_PRIVATE_KEY: ${{ secrets.CMMS_EC2_SSH_KEY }}
           SSH_HOST: ${{ secrets.CMMS_EC2_HOST }}
           SSH_USER: ${{ secrets.CMMS_EC2_USER }}
+          EXPECTED_FINGERPRINT: ${{ secrets.CMMS_EC2_HOST_FINGERPRINT }}
+
         run: |
           set -Eeuo pipefail
 
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
 
-          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/cmms_deploy
-          chmod 600 ~/.ssh/cmms_deploy
+          KEY_FILE="$HOME/.ssh/cmms_deploy"
+          KNOWN_HOSTS="$HOME/.ssh/known_hosts"
 
-          ssh-keyscan -T 10 -t ed25519 "$SSH_HOST" \
-            > ~/.ssh/known_hosts
+          trap 'rm -f "$KEY_FILE"' EXIT
 
-          chmod 600 ~/.ssh/known_hosts
+          echo "========== 1. INSTALL SSH KEY =========="
 
-          echo "========== HOST FINGERPRINT =========="
-          ssh-keygen -lf ~/.ssh/known_hosts -E sha256
+          printf '%s\n' "$SSH_PRIVATE_KEY" > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+
+          ssh-keygen -y -f "$KEY_FILE" > /dev/null
+
+          echo "Private key format validated."
 
           echo
-          echo "========== SSH CONNECTION =========="
+          echo "========== 2. FETCH EC2 PUBLIC HOST KEY =========="
+
+          ssh-keyscan -T 10 -t ed25519 "$SSH_HOST" \
+            2>/dev/null > "$KNOWN_HOSTS"
+
+          test -s "$KNOWN_HOSTS"
+          chmod 600 "$KNOWN_HOSTS"
+
+          echo
+          echo "========== 3. VERIFY HOST FINGERPRINT =========="
+
+          ACTUAL_FINGERPRINT="$(
+            ssh-keygen -lf "$KNOWN_HOSTS" -E sha256 |
+            awk '{print $2}'
+          )"
+
+          echo "Expected: $EXPECTED_FINGERPRINT"
+          echo "Actual:   $ACTUAL_FINGERPRINT"
+
+          if [ "$ACTUAL_FINGERPRINT" != "$EXPECTED_FINGERPRINT" ]; then
+            echo "ERROR: EC2 host fingerprint mismatch."
+            exit 1
+          fi
+
+          echo "Host fingerprint verification passed."
+
+          echo
+          echo "========== 4. TEST SSH AUTHENTICATION =========="
 
           ssh \
-            -i ~/.ssh/cmms_deploy \
+            -i "$KEY_FILE" \
+            -o IdentitiesOnly=yes \
             -o BatchMode=yes \
             -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$KNOWN_HOSTS" \
             -o ConnectTimeout=20 \
             "$SSH_USER@$SSH_HOST" \
             'echo "SSH CONNECTION SUCCESSFUL"; hostname; whoami; date'
 
-      - name: Cleanup SSH key
-        if: always()
-        shell: bash
-        run: |
-          rm -f ~/.ssh/cmms_deploy
+          echo
+          echo "SSH DIAGNOSTIC COMPLETED SUCCESSFULLY."
