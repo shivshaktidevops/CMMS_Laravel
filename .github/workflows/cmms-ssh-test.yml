@@ -1,0 +1,33 @@
+
+name: CMMS SSH Connection Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ssh-test:
+    name: Verify EC2 SSH connection
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Connect to EC2
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.CMMS_EC2_HOST }}
+          username: ${{ secrets.CMMS_EC2_USER }}
+          key: ${{ secrets.CMMS_EC2_SSH_KEY }}
+          fingerprint: ${{ secrets.CMMS_EC2_HOST_FINGERPRINT }}
+          port: 22
+          timeout: 30s
+          command_timeout: 1m
+          script: |
+            set -Eeuo pipefail
+
+            echo "SSH CONNECTION SUCCESSFUL"
+            hostname
+            whoami
+            date
