@@ -15,6 +15,7 @@ jobs:
 
     steps:
       - name: Install SSH key and verify host
+        uses: appleboy/ssh-action@v1.2.2
         shell: bash
         env:
           SSH_PRIVATE_KEY: ${{ secrets.CMMS_EC2_SSH_KEY }}
