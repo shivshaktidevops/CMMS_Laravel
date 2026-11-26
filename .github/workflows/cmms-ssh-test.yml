@@ -14,20 +14,42 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - name: Connect to EC2
-        uses: appleboy/ssh-action@v1.2.2
-        with:
-          host: ${{ secrets.CMMS_EC2_HOST }}
-          username: ${{ secrets.CMMS_EC2_USER }}
-          key: ${{ secrets.CMMS_EC2_SSH_KEY }}
-          fingerprint: ${{ secrets.CMMS_EC2_HOST_FINGERPRINT }}
-          port: 22
-          timeout: 30s
-          command_timeout: 1m
-          script: |
-            set -Eeuo pipefail
+      - name: Install SSH key and verify host
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.CMMS_EC2_SSH_KEY }}
+          SSH_HOST: ${{ secrets.CMMS_EC2_HOST }}
+          SSH_USER: ${{ secrets.CMMS_EC2_USER }}
+        run: |
+          set -Eeuo pipefail
 
-            echo "SSH CONNECTION SUCCESSFUL"
-            hostname
-            whoami
-            date
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/cmms_deploy
+          chmod 600 ~/.ssh/cmms_deploy
+
+          ssh-keyscan -T 10 -t ed25519 "$SSH_HOST" \
+            > ~/.ssh/known_hosts
+
+          chmod 600 ~/.ssh/known_hosts
+
+          echo "========== HOST FINGERPRINT =========="
+          ssh-keygen -lf ~/.ssh/known_hosts -E sha256
+
+          echo
+          echo "========== SSH CONNECTION =========="
+
+          ssh \
+            -i ~/.ssh/cmms_deploy \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=20 \
+            "$SSH_USER@$SSH_HOST" \
+            'echo "SSH CONNECTION SUCCESSFUL"; hostname; whoami; date'
+
+      - name: Cleanup SSH key
+        if: always()
+        shell: bash
+        run: |
+          rm -f ~/.ssh/cmms_deploy
