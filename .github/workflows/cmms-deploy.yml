@@ -1,0 +1,408 @@
+
+name: CMMS Laravel - Staging Deployment
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+    inputs:
+      approve_migrations:
+        description: "Approve backup and execution of newly added migrations"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cmms-staging-deployment
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Inspect EC2 and incoming changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Inspect server and GitHub changes
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.CMMS_EC2_HOST }}
+          username: ${{ secrets.CMMS_EC2_USER }}
+          key: ${{ secrets.CMMS_EC2_SSH_KEY }}
+          fingerprint: ${{ secrets.CMMS_EC2_HOST_FINGERPRINT }}
+          port: 22
+          timeout: 30s
+          command_timeout: 5m
+          script: |
+            set -Eeuo pipefail
+
+            APP="/var/www/CMMS_Laravel"
+
+            cd "$APP"
+
+            echo "========== SERVER IDENTITY =========="
+            hostname
+            whoami
+            pwd
+
+            echo
+            echo "========== BRANCH VALIDATION =========="
+            test "$(git branch --show-current)" = "main"
+
+            echo
+            echo "========== LOCAL TRACKED FILE CHECK =========="
+            if ! git diff --quiet || ! git diff --cached --quiet; then
+              echo "ERROR: Tracked local changes detected."
+              git status --short
+              exit 1
+            fi
+
+            echo "Tracked working tree is clean."
+            echo "Untracked uploads and backups will be preserved."
+
+            echo
+            echo "========== FETCH GITHUB =========="
+            git fetch origin main
+
+            CURRENT="$(git rev-parse HEAD)"
+            TARGET="$(git rev-parse origin/main)"
+
+            echo "Current EC2 commit: $CURRENT"
+            echo "Target GitHub commit: $TARGET"
+
+            if [ "$CURRENT" = "$TARGET" ]; then
+              echo "EC2 is already synchronized with GitHub."
+              exit 0
+            fi
+
+            echo
+            echo "========== INCOMING COMMITS =========="
+            git log --oneline "$CURRENT..$TARGET"
+
+            echo
+            echo "========== INCOMING FILE CHANGES =========="
+            git diff --name-status "$CURRENT" "$TARGET"
+
+            echo
+            echo "========== INCOMING MIGRATION CHANGES =========="
+            MIGRATIONS="$(git diff --name-status "$CURRENT" "$TARGET" -- database/migrations)"
+
+            if [ -n "$MIGRATIONS" ]; then
+              echo "$MIGRATIONS"
+
+              echo
+              echo "========== MIGRATION SOURCE REVIEW =========="
+              git diff --no-ext-diff --unified=5 "$CURRENT" "$TARGET" -- database/migrations
+            else
+              echo "No migration files changed."
+            fi
+
+            echo
+            echo "========== CURRENT DATABASE MIGRATION STATUS =========="
+            STATUS="$(php artisan migrate:status --no-ansi)"
+            echo "$STATUS"
+
+            if grep -q "Pending" <<< "$STATUS"; then
+              echo "ERROR: Existing pending migrations detected."
+              echo "Resolve them before deploying another update."
+              exit 1
+            fi
+
+            echo
+            echo "========== PREFLIGHT COMPLETED =========="
+
+  deploy:
+    name: Deploy to CMMS staging EC2
+    runs-on: ubuntu-latest
+    needs: preflight
+    timeout-minutes: 25
+
+    # Configure required reviewers in GitHub:
+    # Settings -> Environments -> cmms-staging
+    environment:
+      name: cmms-staging
+
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Deploy Laravel application
+        uses: appleboy/ssh-action@v1.2.2
+        env:
+          APPROVE_MIGRATIONS: ${{ inputs.approve_migrations && 'true' || 'false' }}
+        with:
+          host: ${{ secrets.CMMS_EC2_HOST }}
+          username: ${{ secrets.CMMS_EC2_USER }}
+          key: ${{ secrets.CMMS_EC2_SSH_KEY }}
+          fingerprint: ${{ secrets.CMMS_EC2_HOST_FINGERPRINT }}
+          port: 22
+          timeout: 30s
+          command_timeout: 20m
+          envs: APPROVE_MIGRATIONS
+
+          script: |
+            set -Eeuo pipefail
+            umask 077
+
+            APP="/var/www/CMMS_Laravel"
+            BRANCH="main"
+            BACKUP_DIR="/home/ubuntu/db-backups"
+            APP_URL="https://cmms.plant.stagingproduct.in"
+
+            cd "$APP"
+
+            echo "========== 1. SERVER VALIDATION =========="
+
+            test "$(whoami)" = "ubuntu"
+            test "$(git branch --show-current)" = "$BRANCH"
+
+            if ! git diff --quiet || ! git diff --cached --quiet; then
+              echo "ERROR: Tracked local changes detected."
+              git status --short
+              exit 1
+            fi
+
+            echo
+            echo "========== 2. FETCH LATEST CODE =========="
+
+            git fetch origin "$BRANCH"
+
+            CURRENT="$(git rev-parse HEAD)"
+            TARGET="$(git rev-parse "origin/$BRANCH")"
+
+            echo "Current: $CURRENT"
+            echo "Target:  $TARGET"
+
+            if [ "$CURRENT" = "$TARGET" ]; then
+              echo "No new commits. Nothing to deploy."
+              exit 0
+            fi
+
+            echo
+            echo "========== 3. REVIEW MIGRATION CHANGES =========="
+
+            MIGRATION_DIFF="$(git diff --name-status "$CURRENT" "$TARGET" -- database/migrations)"
+
+            HAS_NEW_MIGRATIONS=false
+
+            if [ -n "$MIGRATION_DIFF" ]; then
+              echo "$MIGRATION_DIFF"
+
+              # Existing migration files must not be modified,
+              # renamed or deleted. Add a new migration instead.
+              if awk '$1 != "A" { bad=1 } END { exit bad ? 0 : 1 }' <<< "$MIGRATION_DIFF"; then
+                echo "ERROR: Existing migration modified, renamed or deleted."
+                echo "Use a new migration file instead."
+                exit 1
+              fi
+
+              HAS_NEW_MIGRATIONS=true
+
+              if [ "${APPROVE_MIGRATIONS:-false}" != "true" ]; then
+                echo "ERROR: New migrations detected."
+                echo "Review the migration source and manually run"
+                echo "this workflow with approve_migrations=true."
+                exit 1
+              fi
+
+              echo "Migration approval received."
+            else
+              echo "No migration files changed."
+            fi
+
+            echo
+            echo "========== 4. VERIFY CURRENT MIGRATION STATUS =========="
+
+            CURRENT_STATUS="$(php artisan migrate:status --no-ansi)"
+            echo "$CURRENT_STATUS"
+
+            if grep -q "Pending" <<< "$CURRENT_STATUS"; then
+              echo "ERROR: Existing pending migrations detected."
+              exit 1
+            fi
+
+            echo
+            echo "========== 5. DATABASE BACKUP =========="
+
+            if [ "$HAS_NEW_MIGRATIONS" = "true" ]; then
+
+              command -v mysqldump >/dev/null
+              command -v gzip >/dev/null
+
+              mkdir -p "$BACKUP_DIR"
+
+              php <<'PHP'
+            <?php
+
+            require 'vendor/autoload.php';
+
+            $app = require 'bootstrap/app.php';
+            $app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+
+            $connection = config('database.connections.mysql');
+
+            if (($connection['driver'] ?? '') !== 'mysql') {
+                fwrite(STDERR, "Expected MySQL connection.\n");
+                exit(1);
+            }
+
+            if (($connection['database'] ?? '') !== 'plant_cmms') {
+                fwrite(STDERR, "Unexpected database name. Backup aborted.\n");
+                exit(1);
+            }
+
+            $directory = '/home/ubuntu/db-backups';
+
+            if (!is_dir($directory) && !mkdir($directory, 0700, true)) {
+                fwrite(STDERR, "Cannot create backup directory.\n");
+                exit(1);
+            }
+
+            $filename = $directory . '/plant_cmms_' .
+                date('Ymd_His') . '_' . getmypid() . '.sql.gz';
+
+            $optionFile = tempnam(sys_get_temp_dir(), 'cmms-mysql-');
+
+            if ($optionFile === false) {
+                fwrite(STDERR, "Cannot create MySQL option file.\n");
+                exit(1);
+            }
+
+            $quote = static function ($value): string {
+                $value = (string) $value;
+                $value = str_replace(
+                    ["\\", '"', "\n", "\r"],
+                    ["\\\\", '\\"', '\\n', '\\r'],
+                    $value
+                );
+
+                return '"' . $value . '"';
+            };
+
+            $options =
+                "[client]\n" .
+                "host=" . $quote($connection['host'] ?? '127.0.0.1') . "\n" .
+                "port=" . (int) ($connection['port'] ?? 3306) . "\n" .
+                "user=" . $quote($connection['username'] ?? '') . "\n" .
+                "password=" . $quote($connection['password'] ?? '') . "\n";
+
+            file_put_contents($optionFile, $options);
+            chmod($optionFile, 0600);
+
+            $command =
+                'mysqldump --defaults-extra-file=' .
+                escapeshellarg($optionFile) .
+                ' --single-transaction --routines --triggers --databases ' .
+                escapeshellarg($connection['database']) .
+                ' | gzip -c > ' . escapeshellarg($filename);
+
+            exec('bash -o pipefail -c ' . escapeshellarg($command), $output, $status);
+
+            unlink($optionFile);
+
+            if ($status !== 0 || !is_file($filename) || filesize($filename) === 0) {
+                @unlink($filename);
+                fwrite(STDERR, "Database backup failed.\n");
+                exit(1);
+            }
+
+            exec('gzip -t ' . escapeshellarg($filename), $checkOutput, $checkStatus);
+
+            if ($checkStatus !== 0) {
+                @unlink($filename);
+                fwrite(STDERR, "Backup integrity check failed.\n");
+                exit(1);
+            }
+
+            echo "Backup created: {$filename}\n";
+            echo "Backup size: " . filesize($filename) . " bytes\n";
+
+            exec('sha256sum ' . escapeshellarg($filename), $hashOutput, $hashStatus);
+
+            if ($hashStatus !== 0) {
+                fwrite(STDERR, "Could not calculate backup checksum.\n");
+                exit(1);
+            }
+
+            echo implode("\n", $hashOutput) . "\n";
+            PHP
+
+            else
+              echo "No new migrations. Database backup not required for this code-only deployment."
+            fi
+
+            echo
+            echo "========== 6. DEPLOY CODE =========="
+
+            git merge --ff-only "$TARGET"
+
+            echo
+            echo "========== 7. COMPOSER INSTALL =========="
+
+            composer install \
+              --no-dev \
+              --prefer-dist \
+              --no-interaction \
+              --optimize-autoloader
+
+            echo
+            echo "========== 8. PHP SYNTAX VALIDATION =========="
+
+            while IFS= read -r FILE; do
+              if [[ "$FILE" == *.php && -f "$FILE" ]]; then
+                php -l "$FILE"
+              fi
+            done < <(git diff --name-only "$CURRENT" "$TARGET" -- '*.php')
+
+            echo
+            echo "========== 9. CLEAR LARAVEL CACHES =========="
+
+            php artisan optimize:clear
+
+            echo
+            echo "========== 10. DATABASE MIGRATIONS =========="
+
+            if [ "$HAS_NEW_MIGRATIONS" = "true" ]; then
+              echo "Executing approved migrations..."
+              php artisan migrate --force
+            else
+              echo "No new migrations to execute."
+            fi
+
+            FINAL_STATUS="$(php artisan migrate:status --no-ansi)"
+            echo "$FINAL_STATUS"
+
+            if grep -q "Pending" <<< "$FINAL_STATUS"; then
+              echo "ERROR: Pending migrations remain."
+              exit 1
+            fi
+
+            echo
+            echo "========== 11. SERVICE VALIDATION =========="
+
+            sudo nginx -t
+
+            test "$(sudo systemctl is-active nginx)" = "active"
+            test "$(sudo systemctl is-active php8.5-fpm)" = "active"
+
+            echo
+            echo "========== 12. APPLICATION HEALTH CHECK =========="
+
+            curl --fail --silent --show-error \
+              --output /dev/null \
+              "$APP_URL/login.html"
+
+            echo "Login page HTTP check passed."
+
+            echo
+            echo "========== 13. FINAL DEPLOYMENT STATUS =========="
+
+            git log -1 --oneline
+            git status --short
+
+            echo
+            echo "CMMS STAGING DEPLOYMENT COMPLETED SUCCESSFULLY."
